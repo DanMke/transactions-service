@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: transactions-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/transactions}
+    username: ${SPRING_DATASOURCE_USERNAME:transactions}
+    password: ${SPRING_DATASOURCE_PASSWORD:transactions}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
