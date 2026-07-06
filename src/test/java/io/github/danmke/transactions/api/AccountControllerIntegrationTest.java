@@ -87,6 +87,46 @@ class AccountControllerIntegrationTest {
         assertThat(firstBody.get("account_id").asLong()).isNotEqualTo(secondBody.get("account_id").asLong());
     }
 
+    @Test
+    void returnsAccountById() throws Exception {
+        ResponseEntity<String> created = postJson("{\"document_number\": \"55544433322\"}");
+        long accountId = objectMapper.readTree(created.getBody()).get("account_id").asLong();
+
+        ResponseEntity<String> response = restTemplate.getForEntity("/accounts/" + accountId, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("account_id").asLong()).isEqualTo(accountId);
+        assertThat(body.get("document_number").asText()).isEqualTo("55544433322");
+    }
+
+    @Test
+    void returnsProblemDetail404WhenAccountNotFound() throws Exception {
+        ResponseEntity<String> response = restTemplate.getForEntity("/accounts/99999999", String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getHeaders().getContentType())
+                .matches(type -> type.isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("status").asInt()).isEqualTo(404);
+        assertThat(body.get("detail").asText()).contains("99999999");
+    }
+
+    @Test
+    void validationErrorUsesProblemDetailFormat() throws Exception {
+        ResponseEntity<String> response = postJson("{}");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType())
+                .matches(type -> type.isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("status").asInt()).isEqualTo(400);
+        assertThat(body.get("errors").isArray()).isTrue();
+        assertThat(body.get("errors")).isNotEmpty();
+    }
+
     private ResponseEntity<String> postJson(String json) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

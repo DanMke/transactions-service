@@ -6,6 +6,8 @@ import io.github.danmke.transactions.application.AccountService;
 import io.github.danmke.transactions.domain.Account;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,7 +35,11 @@ public class AccountController {
                 .buildAndExpand(account.getId())
                 .toUri();
 
-        AccountResponse body = new AccountResponse(account.getId(), account.getDocumentNumber());
-        return ResponseEntity.created(location).body(body);
+        return ResponseEntity.created(location).body(AccountResponse.from(account));
+    }
+
+    @GetMapping("/{accountId}")
+    public AccountResponse getById(@PathVariable Long accountId) {
+        return AccountResponse.from(accountService.getById(accountId));
     }
 }

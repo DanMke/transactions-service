@@ -5,9 +5,10 @@ Cada tipo de operação (compra à vista, compra parcelada, saque, voucher de
 crédito) normaliza o sinal do valor: compras e saque são negativos, voucher é
 positivo.
 
-> **Estado atual:** walking skeleton + domínio/schema + primeiro endpoint de
-> negócio (`POST /accounts`). Os demais endpoints, services e repositories
-> chegam nas próximas fases. Veja o desenho abaixo.
+> **Estado atual:** walking skeleton + domínio/schema + endpoints de conta
+> (`POST /accounts`, `GET /accounts/{id}`) com tratamento de erro unificado
+> via `ProblemDetail`. As transações e demais fluxos chegam nas próximas
+> fases. Veja o desenho abaixo.
 
 ---
 
@@ -23,11 +24,11 @@ flowchart TB
 
     subgraph app["transactions-service · Spring Boot 3.5"]
         direction TB
-        api["api/<br/>controllers REST<br/>POST /accounts ✅"]
+        api["api/<br/>controllers REST<br/>POST · GET /accounts ✅"]
         application["application/<br/>services (orquestração)<br/>AccountService ✅"]
         domain["domain/<br/>Account, Transaction,<br/>OperationType ✅"]
         repository["repository/<br/>Spring Data JPA<br/>AccountRepository ✅"]
-        config["config/ · exception/<br/><i>(planejado)</i>"]
+        config["exception/ ProblemDetail ✅<br/>config/ <i>(planejado)</i>"]
         actuator["/actuator/health ✅"]
     end
 
@@ -53,7 +54,7 @@ flowchart TB
 | `application/` | Services que orquestram o fluxo (buscam no repository, coordenam entidades, lançam exceptions de negócio) — `AccountService` ✅ (demais _planejado_) |
 | `domain/` | Entidades e regra de negócio pura (sem depender de HTTP/controllers/DTOs) ✅ |
 | `repository/` | Acesso a dados (Spring Data JPA) — `AccountRepository` ✅ (demais _planejado_) |
-| `exception/` | Exceptions e tratamento de erro _(planejado)_ |
+| `exception/` | Exceptions e tratamento de erro — `AccountNotFoundException`, `GlobalExceptionHandler` (`ProblemDetail`) ✅ (demais _planejado_) |
 | `config/` | Configurações da aplicação _(planejado)_ |
 
 ---
@@ -224,3 +225,20 @@ Atualizado à medida que cada fase introduz uma decisão.
   correspondente entra numa fase futura; aqui só emitimos o header).
 - **Erros de validação usam o `400` padrão do Spring:** um handler de erro
   formatado é escopo de fase futura (`exception/`).
+
+### Fase 4 — GET /accounts/{id} e tratamento de erro
+
+- **`ProblemDetail` (RFC 7807) como formato único de erro:** um
+  `@RestControllerAdvice` (`GlobalExceptionHandler`) que estende
+  `ResponseEntityExceptionHandler` centraliza as respostas de erro. Tanto o
+  erro de negócio (**404**) quanto os de Bean Validation (**400**) saem no
+  mesmo formato — a API nunca expõe dois formatos de erro diferentes.
+- **`handleMethodArgumentNotValid` sobrescrito:** converte os erros de campo do
+  Bean Validation num `ProblemDetail`, com uma extensão `errors` (lista de
+  `{ field, message }`) para o cliente saber exatamente o que falhou.
+- **Exceptions de negócio em `exception/`, lançadas pelo service:**
+  `AccountService.getById` lança `AccountNotFoundException` quando a conta não
+  existe; o handler a mapeia para 404. A decisão "existe ou estoura" fica na
+  camada `application`, não no controller.
+- **`getById` semântico:** retorna o domínio ou lança — em vez de devolver
+  `Optional`/`null` e empurrar a decisão de status para o controller.
