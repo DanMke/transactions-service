@@ -5,10 +5,9 @@ Cada tipo de operação (compra à vista, compra parcelada, saque, voucher de
 crédito) normaliza o sinal do valor: compras e saque são negativos, voucher é
 positivo.
 
-> **Estado atual:** walking skeleton + domínio/schema + endpoints de conta
-> (`POST /accounts`, `GET /accounts/{id}`) com tratamento de erro unificado
-> via `ProblemDetail`. As transações e demais fluxos chegam nas próximas
-> fases. Veja o desenho abaixo.
+> **Estado atual:** contas (`POST /accounts`, `GET /accounts/{id}`) e
+> transações (`POST /transactions`) implementadas, com tratamento de erro
+> unificado via `ProblemDetail`. Veja o desenho abaixo.
 
 ---
 
@@ -24,18 +23,18 @@ flowchart TB
 
     subgraph app["transactions-service · Spring Boot 3.5"]
         direction TB
-        api["api/<br/>controllers REST<br/>POST · GET /accounts ✅"]
-        application["application/<br/>services (orquestração)<br/>AccountService ✅"]
+        api["api/<br/>controllers REST<br/>/accounts · /transactions ✅"]
+        application["application/<br/>services (orquestração)<br/>Account · Transaction ✅"]
         domain["domain/<br/>Account, Transaction,<br/>OperationType ✅"]
-        repository["repository/<br/>Spring Data JPA<br/>AccountRepository ✅"]
-        config["exception/ ProblemDetail ✅<br/>config/ <i>(planejado)</i>"]
+        repository["repository/<br/>Spring Data JPA<br/>Account · Transaction ✅"]
+        config["exception/ ProblemDetail ✅<br/>config/ ClockConfig ✅"]
         actuator["/actuator/health ✅"]
     end
 
     db[("PostgreSQL 16<br/>accounts · operation_types · transactions ✅")]
     flyway["Flyway migrations<br/>V1, V2, V3 ✅"]
 
-    client -->|"POST /accounts ✅ · /transactions (planejado)"| api
+    client -->|"POST /accounts · /transactions ✅"| api
     api --> application
     application --> domain
     application --> repository
@@ -50,12 +49,12 @@ flowchart TB
 
 | Pacote | Responsabilidade |
 |---|---|
-| `api/` | Controllers REST / DTOs — `AccountController`, `CreateAccountRequest`, `AccountResponse` ✅ (demais _planejado_) |
-| `application/` | Services que orquestram o fluxo (buscam no repository, coordenam entidades, lançam exceptions de negócio) — `AccountService` ✅ (demais _planejado_) |
+| `api/` | Controllers REST / DTOs — `AccountController`, `TransactionController` + DTOs de request/response ✅ |
+| `application/` | Services que orquestram o fluxo (buscam no repository, coordenam entidades, lançam exceptions de negócio) — `AccountService`, `TransactionService` ✅ |
 | `domain/` | Entidades e regra de negócio pura (sem depender de HTTP/controllers/DTOs) ✅ |
-| `repository/` | Acesso a dados (Spring Data JPA) — `AccountRepository` ✅ (demais _planejado_) |
-| `exception/` | Exceptions e tratamento de erro — `AccountNotFoundException`, `GlobalExceptionHandler` (`ProblemDetail`) ✅ (demais _planejado_) |
-| `config/` | Configurações da aplicação _(planejado)_ |
+| `repository/` | Acesso a dados (Spring Data JPA) — `AccountRepository`, `TransactionRepository` ✅ |
+| `exception/` | Exceptions e tratamento de erro — exceptions de negócio + `GlobalExceptionHandler` (`ProblemDetail`) ✅ |
+| `config/` | Configurações da aplicação — `ClockConfig` (bean `Clock`) ✅ |
 
 ---
 
@@ -143,12 +142,13 @@ docker compose up --build
 
 ```
 src/main/java/io/github/danmke/transactions/
-  api/            # controllers REST            (planejado)
-  application/    # services de orquestração    (planejado)
+  api/            # controllers REST + DTOs      ✅
+    dto/
+  application/    # services de orquestração     ✅
   domain/         # entidades + regra de negócio ✅
-  repository/     # acesso a dados              (planejado)
-  exception/      # tratamento de erros         (planejado)
-  config/         # configurações              (planejado)
+  repository/     # acesso a dados              ✅
+  exception/      # tratamento de erros         ✅
+  config/         # configurações               ✅
 src/main/resources/
   application.yml
   db/migration/   # V1__create_accounts, V2__create_operation_types, V3__create_transactions
@@ -171,6 +171,9 @@ Atualizado à medida que cada fase introduz uma decisão.
   a versão exata do Gradle; ninguém precisa instalar Gradle na máquina.
 - **Health check via Actuator primeiro:** prova de vida ponta a ponta (app sobe,
   conecta no banco, responde) antes de qualquer regra de negócio.
+- **Detalhes do health check seguros por padrão:** `show-details` fica como
+  `never` por default e pode ser sobrescrito via variável de ambiente quando
+  necessário em ambientes controlados.
 - **Docker multi-stage, build sem testes:** o estágio de build roda `bootJar`
   (não `build`), evitando exigir Docker-in-Docker; os testes de integração com
   Testcontainers rodam localmente / na pipeline, onde há um Docker acessível.
@@ -233,12 +236,47 @@ Atualizado à medida que cada fase introduz uma decisão.
   `ResponseEntityExceptionHandler` centraliza as respostas de erro. Tanto o
   erro de negócio (**404**) quanto os de Bean Validation (**400**) saem no
   mesmo formato — a API nunca expõe dois formatos de erro diferentes.
+- **`title` e `type` explícitos nos problemas:** cada erro recebe um título
+  estável e um `type` no formato `urn:problem-type:*`, facilitando testes,
+  documentação e interpretação por clientes.
 - **`handleMethodArgumentNotValid` sobrescrito:** converte os erros de campo do
   Bean Validation num `ProblemDetail`, com uma extensão `errors` (lista de
   `{ field, message }`) para o cliente saber exatamente o que falhou.
+- **Erros comuns de infraestrutura HTTP também padronizados:** JSON malformado
+  (`handleHttpMessageNotReadable`) e path/query parameter com tipo inválido
+  (`handleTypeMismatch`, como `GET /accounts/abc`) também retornam
+  `ProblemDetail` com **400**.
 - **Exceptions de negócio em `exception/`, lançadas pelo service:**
   `AccountService.getById` lança `AccountNotFoundException` quando a conta não
   existe; o handler a mapeia para 404. A decisão "existe ou estoura" fica na
   camada `application`, não no controller.
 - **`getById` semântico:** retorna o domínio ou lança — em vez de devolver
   `Optional`/`null` e empurrar a decisão de status para o controller.
+
+### Fase 5 — POST /transactions
+
+- **Precedência explícita de validação/erro** (do payload ao negócio): campos
+  ausentes e `amount` fora de `@Digits(integer = 17, fraction = 2)` → **400**
+  (Bean Validation); `amount` negativo → **400**; conta inexistente → **404**;
+  `operation_type_id` desconhecido → **422**; `amount` zero → **422**. O
+  `TransactionService` implementa exatamente essa ordem.
+- **Sinal negativo é erro de contrato (400), não de negócio:** a API só aceita
+  magnitude positiva — o sinal é derivado do tipo de operação. Zero, por outro
+  lado, é regra de negócio → **422**.
+- **`IllegalArgumentException` de `fromId()` convertida explicitamente** em
+  `InvalidOperationTypeException` dentro do service. Não se mapeia
+  `IllegalArgumentException` genericamente no handler, senão as validações
+  defensivas de domínio (Fase 2) seriam capturadas e classificadas como 422
+  por engano.
+- **`Clock` injetável (`ClockConfig`):** o `event_date` vem de
+  `OffsetDateTime.now(clock)` — `Clock.systemUTC()` em produção, `Clock.fixed`
+  nos testes, tornando o carimbo de tempo determinístico e testável.
+- **Resposta com o estado final, não eco do input:** `TransactionResponse`
+  devolve o `amount` já **normalizado** (sinal aplicado pela entidade) e o
+  `event_date` gerado — o cliente vê o que foi de fato persistido.
+- **`201 Created` + `Location` em transactions:** mesmo sem um `GET
+  /transactions/{id}` no escopo do PDF, o endpoint retorna o identificador do
+  recurso criado em `Location` por consistência com `POST /accounts` e com o
+  estilo REST.
+- **A normalização permanece no domínio:** o service valida e delega; quem
+  aplica o sinal é o construtor de `Transaction` (Fase 2), não o service.

@@ -48,25 +48,25 @@ class AccountControllerIntegrationTest {
     }
 
     @Test
-    void rejectsMissingDocumentNumber() {
+    void rejectsMissingDocumentNumber() throws Exception {
         ResponseEntity<String> response = postJson("{}");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertValidationProblemDetail(response, HttpStatus.BAD_REQUEST);
     }
 
     @Test
-    void rejectsBlankDocumentNumber() {
+    void rejectsBlankDocumentNumber() throws Exception {
         ResponseEntity<String> response = postJson("{\"document_number\": \"   \"}");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertValidationProblemDetail(response, HttpStatus.BAD_REQUEST);
     }
 
     @Test
-    void rejectsDocumentNumberExceedingMaxSize() {
+    void rejectsDocumentNumberExceedingMaxSize() throws Exception {
         String tooLong = "1".repeat(51);
         ResponseEntity<String> response = postJson("{\"document_number\": \"" + tooLong + "\"}");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertValidationProblemDetail(response, HttpStatus.BAD_REQUEST);
     }
 
     @Test
@@ -104,12 +104,8 @@ class AccountControllerIntegrationTest {
     void returnsProblemDetail404WhenAccountNotFound() throws Exception {
         ResponseEntity<String> response = restTemplate.getForEntity("/accounts/99999999", String.class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getHeaders().getContentType())
-                .matches(type -> type.isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
-
-        JsonNode body = objectMapper.readTree(response.getBody());
-        assertThat(body.get("status").asInt()).isEqualTo(404);
+        JsonNode body = assertProblemDetail(response, HttpStatus.NOT_FOUND);
+        assertThat(body.get("title").asText()).isEqualTo("Account not found");
         assertThat(body.get("detail").asText()).contains("99999999");
     }
 
@@ -117,14 +113,46 @@ class AccountControllerIntegrationTest {
     void validationErrorUsesProblemDetailFormat() throws Exception {
         ResponseEntity<String> response = postJson("{}");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        JsonNode body = assertValidationProblemDetail(response, HttpStatus.BAD_REQUEST);
+        assertThat(body.get("title").asText()).isEqualTo("Validation failed");
+    }
+
+    @Test
+    void malformedJsonUsesProblemDetailFormat() throws Exception {
+        ResponseEntity<String> response = postJson("{\"document_number\":");
+
+        JsonNode body = assertProblemDetail(response, HttpStatus.BAD_REQUEST);
+        assertThat(body.get("title").asText()).isEqualTo("Malformed JSON request");
+    }
+
+    @Test
+    void invalidAccountIdPathVariableUsesProblemDetailFormat() throws Exception {
+        ResponseEntity<String> response = restTemplate.getForEntity("/accounts/abc", String.class);
+
+        JsonNode body = assertProblemDetail(response, HttpStatus.BAD_REQUEST);
+        assertThat(body.get("title").asText()).isEqualTo("Invalid request parameter");
+    }
+
+    private JsonNode assertValidationProblemDetail(ResponseEntity<String> response, HttpStatus expectedStatus)
+            throws Exception {
+        JsonNode body = assertProblemDetail(response, expectedStatus);
+        assertThat(body.get("errors").isArray()).isTrue();
+        assertThat(body.get("errors")).isNotEmpty();
+        return body;
+    }
+
+    private JsonNode assertProblemDetail(ResponseEntity<String> response, HttpStatus expectedStatus) throws Exception {
+        assertThat(response.getStatusCode()).isEqualTo(expectedStatus);
+        assertThat(response.getHeaders().getContentType()).isNotNull();
         assertThat(response.getHeaders().getContentType())
                 .matches(type -> type.isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
 
         JsonNode body = objectMapper.readTree(response.getBody());
-        assertThat(body.get("status").asInt()).isEqualTo(400);
-        assertThat(body.get("errors").isArray()).isTrue();
-        assertThat(body.get("errors")).isNotEmpty();
+        assertThat(body.get("type").asText()).startsWith("urn:problem-type:");
+        assertThat(body.get("title").asText()).isNotBlank();
+        assertThat(body.get("status").asInt()).isEqualTo(expectedStatus.value());
+        assertThat(body.get("detail").asText()).isNotBlank();
+        return body;
     }
 
     private ResponseEntity<String> postJson(String json) {
