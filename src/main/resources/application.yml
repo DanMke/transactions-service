@@ -5,6 +5,12 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/transactions}
     username: ${SPRING_DATASOURCE_USERNAME:transactions}
     password: ${SPRING_DATASOURCE_PASSWORD:transactions}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
 
 management:
   endpoints:
