@@ -5,9 +5,9 @@ Cada tipo de operação (compra à vista, compra parcelada, saque, voucher de
 crédito) normaliza o sinal do valor: compras e saque são negativos, voucher é
 positivo.
 
-> **Estado atual:** walking skeleton + camada de domínio e schema.
-> Ainda **não** há endpoints de negócio (API), services ou repositories —
-> esses entram nas próximas fases. Veja o desenho abaixo.
+> **Estado atual:** walking skeleton + domínio/schema + primeiro endpoint de
+> negócio (`POST /accounts`). Os demais endpoints, services e repositories
+> chegam nas próximas fases. Veja o desenho abaixo.
 
 ---
 
@@ -23,10 +23,10 @@ flowchart TB
 
     subgraph app["transactions-service · Spring Boot 3.5"]
         direction TB
-        api["api/<br/>controllers REST<br/><i>(planejado)</i>"]
-        application["application/<br/>services (orquestração)<br/><i>(planejado)</i>"]
+        api["api/<br/>controllers REST<br/>POST /accounts ✅"]
+        application["application/<br/>services (orquestração)<br/>AccountService ✅"]
         domain["domain/<br/>Account, Transaction,<br/>OperationType ✅"]
-        repository["repository/<br/>Spring Data JPA<br/><i>(planejado)</i>"]
+        repository["repository/<br/>Spring Data JPA<br/>AccountRepository ✅"]
         config["config/ · exception/<br/><i>(planejado)</i>"]
         actuator["/actuator/health ✅"]
     end
@@ -34,7 +34,7 @@ flowchart TB
     db[("PostgreSQL 16<br/>accounts · operation_types · transactions ✅")]
     flyway["Flyway migrations<br/>V1, V2, V3 ✅"]
 
-    client -->|"POST /accounts, /transactions (planejado)"| api
+    client -->|"POST /accounts ✅ · /transactions (planejado)"| api
     api --> application
     application --> domain
     application --> repository
@@ -49,10 +49,10 @@ flowchart TB
 
 | Pacote | Responsabilidade |
 |---|---|
-| `api/` | Controllers REST / DTOs _(planejado)_ |
-| `application/` | Services que orquestram o fluxo (buscam no repository, coordenam entidades, lançam exceptions de negócio) _(planejado)_ |
+| `api/` | Controllers REST / DTOs — `AccountController`, `CreateAccountRequest`, `AccountResponse` ✅ (demais _planejado_) |
+| `application/` | Services que orquestram o fluxo (buscam no repository, coordenam entidades, lançam exceptions de negócio) — `AccountService` ✅ (demais _planejado_) |
 | `domain/` | Entidades e regra de negócio pura (sem depender de HTTP/controllers/DTOs) ✅ |
-| `repository/` | Acesso a dados (Spring Data JPA) _(planejado)_ |
+| `repository/` | Acesso a dados (Spring Data JPA) — `AccountRepository` ✅ (demais _planejado_) |
 | `exception/` | Exceptions e tratamento de erro _(planejado)_ |
 | `config/` | Configurações da aplicação _(planejado)_ |
 
@@ -205,3 +205,22 @@ Atualizado à medida que cada fase introduz uma decisão.
   no domínio.
 - **`document_number` sem `UNIQUE`:** decisão explícita de não impor unicidade
   nesta fase.
+
+### Fase 3 — POST /accounts
+
+- **JSON em snake_case global** (`spring.jackson.property-naming-strategy:
+  SNAKE_CASE`): o desafio especifica campos como `document_number` /
+  `account_id`; configurar globalmente evita `@JsonProperty` espalhado pelos
+  DTOs.
+- **Validação no DTO espelha a coluna do banco** (`@Size(max = 50)` casa com
+  `VARCHAR(50)`): sem isso, um documento acima do limite viraria erro **500** do
+  banco em vez de **400** da aplicação. `@NotBlank` cobre ausência/branco.
+- **DTOs dedicados em `api/dto/`** (`CreateAccountRequest`, `AccountResponse`),
+  como `record`s: a entidade JPA nunca é serializada direto na resposta; o
+  controller faz o mapeamento, mantendo `domain` livre de HTTP.
+- **`AccountService` recebe primitivos, não DTOs:** os DTOs ficam confinados em
+  `api/`; a camada `application` orquestra sobre o domínio.
+- **`201 Created` + header `Location`** apontando para `/accounts/{id}` (o `GET`
+  correspondente entra numa fase futura; aqui só emitimos o header).
+- **Erros de validação usam o `400` padrão do Spring:** um handler de erro
+  formatado é escopo de fase futura (`exception/`).
