@@ -53,8 +53,8 @@ jar: ## Build the executable Spring Boot jar without running tests
 test: ## Run the full test suite (unit + Testcontainers integration; needs Docker)
 	$(GRADLEW) test
 
-test-unit: ## Run only the pure unit tests (no Docker required)
-	$(GRADLEW) test --tests "*OperationTypeTest"
+test-unit: ## Run only the fast unit tests (no Docker required)
+	$(GRADLEW) test --tests "*OperationTypeTest" --tests "*AccountTest" --tests "*TransactionTest" --tests "*TransactionServiceTest"
 
 retest: ## Re-run the full test suite, bypassing Gradle's up-to-date checks
 	$(GRADLEW) test --rerun-tasks

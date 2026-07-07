@@ -70,7 +70,7 @@ public class TransactionController {
                                       "detail": "Validation failed for one or more fields",
                                       "errors": [
                                         {
-                                          "field": "accountId",
+                                          "field": "account_id",
                                           "message": "must not be null"
                                         }
                                       ]

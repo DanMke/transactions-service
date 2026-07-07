@@ -89,7 +89,8 @@ class TransactionControllerIntegrationTest {
         ResponseEntity<String> response = postJson("/transactions",
                 "{\"operation_type_id\": 1, \"amount\": 10.00}");
 
-        assertValidationProblemDetail(response, HttpStatus.BAD_REQUEST);
+        JsonNode body = assertValidationProblemDetail(response, HttpStatus.BAD_REQUEST);
+        assertThat(body.get("errors").get(0).get("field").asText()).isEqualTo("account_id");
     }
 
     @Test
@@ -170,11 +171,12 @@ class TransactionControllerIntegrationTest {
                 + ", \"amount\": " + amount + "}";
     }
 
-    private void assertValidationProblemDetail(ResponseEntity<String> response, HttpStatus expectedStatus)
+    private JsonNode assertValidationProblemDetail(ResponseEntity<String> response, HttpStatus expectedStatus)
             throws Exception {
         JsonNode body = assertProblemDetail(response, expectedStatus);
         assertThat(body.get("errors").isArray()).isTrue();
         assertThat(body.get("errors")).isNotEmpty();
+        return body;
     }
 
     private JsonNode assertProblemDetail(ResponseEntity<String> response, HttpStatus expectedStatus) throws Exception {

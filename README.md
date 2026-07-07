@@ -2,335 +2,470 @@
 
 [![CI](https://github.com/DanMke/transactions-service/actions/workflows/ci.yml/badge.svg)](https://github.com/DanMke/transactions-service/actions/workflows/ci.yml)
 
-Serviço de transações (contas e lançamentos financeiros), construído em fases.
-Cada tipo de operação (compra à vista, compra parcelada, saque, voucher de
-crédito) normaliza o sinal do valor: compras e saque são negativos, voucher é
-positivo.
+A small REST service for managing **accounts** and their **financial transactions**.
+Each transaction is classified by an **operation type** (normal purchase, installment
+purchase, withdrawal, credit voucher). The service enforces a single business rule
+about the amount sign: **purchases and withdrawals are stored as negative, credit
+vouchers as positive** — the client always sends a positive magnitude and the sign is
+derived from the operation type.
 
-> **Estado atual:** contas (`POST /accounts`, `GET /accounts/{id}`) e
-> transações (`POST /transactions`) implementadas, com tratamento de erro
-> unificado via `ProblemDetail` e documentação OpenAPI/Swagger. Veja o
-> desenho abaixo.
+- **Interactive API docs:** `http://localhost:8080/swagger-ui.html`
+- **OpenAPI contract:** `http://localhost:8080/v3/api-docs`
+- **Health:** `http://localhost:8080/actuator/health`
 
 ---
 
-## Arquitetura (visão macro)
+## Table of contents
 
-O diagrama reflete o **alvo** da aplicação; os itens marcados com ✅ já existem,
-os marcados com _(planejado)_ chegam em fases futuras. Será atualizado ao longo
-do projeto.
+- [Architecture](#architecture)
+- [Tech stack & versions](#tech-stack--versions)
+- [Data model](#data-model)
+- [Request flow](#request-flow)
+- [API reference](#api-reference)
+- [Error handling](#error-handling)
+- [Requirements](#requirements)
+- [Running the application](#running-the-application)
+- [Testing](#testing)
+- [Continuous integration](#continuous-integration)
+- [Configuration](#configuration)
+- [Project structure](#project-structure)
+- [Design highlights](#design-highlights)
+
+---
+
+## Architecture
+
+The application follows a layered architecture under the root package
+`io.github.danmke.transactions`. The domain layer holds entities and pure business
+rules and has **no** dependency on Spring MVC, DTOs, HTTP, or configuration.
 
 ```mermaid
-flowchart TB
-    client([Cliente HTTP])
+flowchart LR
+    client([HTTP client])
 
-    subgraph app["transactions-service · Spring Boot 3.5"]
+    subgraph app["transactions-service · Spring Boot"]
         direction TB
-        api["api/<br/>controllers REST<br/>/accounts · /transactions ✅"]
-        application["application/<br/>services (orquestração)<br/>Account · Transaction ✅"]
-        domain["domain/<br/>Account, Transaction,<br/>OperationType ✅"]
-        repository["repository/<br/>Spring Data JPA<br/>Account · Transaction ✅"]
-        config["exception/ ProblemDetail ✅<br/>config/ ClockConfig ✅"]
-        actuator["/actuator/health ✅"]
+        api["api/<br/>Controllers + DTOs"]
+        application["application/<br/>Services (orchestration)"]
+        domain["domain/<br/>Entities + business rules"]
+        repository["repository/<br/>Spring Data JPA"]
+        exception["exception/<br/>ProblemDetail handler"]
+        config["config/<br/>Clock, OpenAPI"]
     end
 
-    db[("PostgreSQL 16<br/>accounts · operation_types · transactions ✅")]
-    flyway["Flyway migrations<br/>V1, V2, V3 ✅"]
+    db[("PostgreSQL<br/>accounts · operation_types · transactions")]
+    flyway["Flyway migrations"]
 
-    client -->|"POST /accounts · /transactions ✅"| api
+    client -->|JSON request| api
     api --> application
     application --> domain
     application --> repository
     repository --> domain
     repository --> db
-    client -->|GET| actuator
-    actuator -.checa conexão.-> db
-    flyway ==>|cria/semeia schema| db
+    api -. errors .-> exception
+    flyway ==>|creates & seeds schema| db
 ```
 
-**Camadas** (pacote raiz `io.github.danmke.transactions`):
-
-| Pacote | Responsabilidade |
+| Package | Responsibility |
 |---|---|
-| `api/` | Controllers REST / DTOs — `AccountController`, `TransactionController` + DTOs de request/response ✅ |
-| `application/` | Services que orquestram o fluxo (buscam no repository, coordenam entidades, lançam exceptions de negócio) — `AccountService`, `TransactionService` ✅ |
-| `domain/` | Entidades e regra de negócio pura (sem depender de HTTP/controllers/DTOs) ✅ |
-| `repository/` | Acesso a dados (Spring Data JPA) — `AccountRepository`, `TransactionRepository` ✅ |
-| `exception/` | Exceptions e tratamento de erro — exceptions de negócio + `GlobalExceptionHandler` (`ProblemDetail`) ✅ |
-| `config/` | Configurações da aplicação — `ClockConfig` (bean `Clock`) ✅ |
+| `api/` | REST controllers and request/response DTOs |
+| `application/` | Services that orchestrate the flow (load from repositories, coordinate entities, raise business exceptions) |
+| `domain/` | Entities and pure business rules (no HTTP/DTO/config dependency) |
+| `repository/` | Data access via Spring Data JPA |
+| `exception/` | Business exceptions and the global `ProblemDetail` handler |
+| `config/` | Cross-cutting beans (`Clock`, OpenAPI metadata) |
 
 ---
 
-## Requisitos para executar
+## Tech stack & versions
 
-O que a máquina precisa depende de **como** você quer rodar:
-
-| Cenário | Requisitos |
+| Tool / Library | Version |
 |---|---|
-| **Rodar a aplicação inteira** (`make up`) | Docker + Docker Compose + Make + Git |
-| **Desenvolver / rodar testes** (`make test`, `make run`) | O acima **+ JDK 21** |
-
-- **Docker Desktop precisa estar em execução** para os testes (Testcontainers) e para o `docker compose`.
-- **Gradle não precisa ser instalado** — o *wrapper* (`gradlew` / `gradlew.bat`) baixa a versão correta automaticamente.
-- No **Windows**, `make` não vem por padrão: instale com `choco install make` (Chocolatey) ou `scoop install make`.
-
----
-
-## Versões utilizadas no desenvolvimento
-
-| Ferramenta / Biblioteca | Versão |
-|---|---|
-| Java (JDK) | 21 LTS |
+| Java (JDK) | 21 (LTS) |
 | Spring Boot | 3.5.16 |
 | Gradle | 8.14.5 (via wrapper) |
-| Plugin `io.spring.dependency-management` | 1.1.7 |
-| PostgreSQL | 16.14 (imagem `postgres:16.14-alpine`) |
-| Driver JDBC PostgreSQL | Gerenciado pelo Spring Boot 3.5.16 |
-| Flyway | Gerenciado pelo Spring Boot 3.5.16 (`flyway-core` + `flyway-database-postgresql`) |
-| Hibernate ORM | Gerenciado pelo Spring Boot 3.5.16 |
-| JUnit Jupiter | Gerenciado pelo Spring Boot 3.5.16 |
-| Testcontainers | Gerenciado pelo Spring Boot 3.5.16 |
-| Docker Engine | 20.10+ (API mínima 1.40) |
+| `io.spring.dependency-management` | 1.1.7 |
+| PostgreSQL | 16.14 (image `postgres:16.14-alpine`) |
+| springdoc-openapi (Swagger UI) | 2.8.9 |
+| Flyway, Hibernate, JUnit 5, Testcontainers | Managed by the Spring Boot BOM |
+| Docker Engine | Any recent release (min API 1.40) |
+
+Persistence is JPA/Hibernate with **Flyway** as the single source of truth for the
+schema; Hibernate runs with `ddl-auto=validate` (it never mutates the schema, only
+validates the entity mappings against it on startup).
 
 ---
 
-## Como executar
+## Data model
 
-Todos os comandos partem da raiz do projeto. A forma recomendada é via `make`
-(rode `make help` para ver todos os alvos).
+Three tables, created by Flyway migrations (`src/main/resources/db/migration`);
+`operation_types` is seeded with the fixed lookup values.
 
-### Aplicação completa em Docker (não precisa de JDK)
+```mermaid
+erDiagram
+    accounts ||--o{ transactions : "has"
+    operation_types ||--o{ transactions : "classifies"
+
+    accounts {
+        bigint account_id PK "identity"
+        varchar_50 document_number "NOT NULL, CHECK not blank"
+    }
+    operation_types {
+        int operation_type_id PK
+        varchar_50 description "NOT NULL"
+    }
+    transactions {
+        bigint transaction_id PK "identity"
+        bigint account_id FK "NOT NULL"
+        int operation_type_id FK "NOT NULL"
+        numeric_19_2 amount "NOT NULL, CHECK <> 0"
+        timestamptz event_date "NOT NULL"
+    }
+```
+
+**`operation_types`** is a fixed lookup table backing the FK on `transactions`. It is
+seeded with four rows and is **not** a queryable JPA entity — in code it is the
+`OperationType` enum (mapped to `operation_type_id` by a JPA `AttributeConverter`):
+
+| `operation_type_id` | Description | Amount sign |
+|:---:|---|:---:|
+| 1 | `NORMAL_PURCHASE` | negative |
+| 2 | `INSTALLMENT_PURCHASE` | negative |
+| 3 | `WITHDRAWAL` | negative |
+| 4 | `CREDIT_VOUCHER` | positive |
+
+Notes:
+
+- Monetary values use `NUMERIC(19,2)` → `BigDecimal` (never floating point).
+- `event_date` uses `TIMESTAMPTZ` → `OffsetDateTime`, generated server-side in UTC.
+- `document_number` is **not** unique — the same document may back multiple accounts.
+- Database `CHECK` constraints (`amount <> 0`, non-blank `document_number`) provide
+  defense in depth on top of the application-level validation.
+
+---
+
+## Request flow
+
+Creating a transaction exercises every layer and the full validation chain:
+
+1. **`api/`** — the controller receives the JSON payload and applies Bean Validation
+   (`@NotNull`, `@Digits`). Malformed payloads are rejected here with **400**.
+2. **`application/`** — `TransactionService` runs business validation in a strict
+   precedence order (sign → account exists → operation type valid → non-zero), loads
+   the `Account`, resolves the `OperationType`, and stamps `event_date` from an
+   injected `Clock`.
+3. **`domain/`** — the `Transaction` constructor applies the sign normalization and
+   enforces its own invariants, so an invalid instance can never be constructed.
+4. **`repository/`** — the entity is persisted via Spring Data JPA.
+5. **`api/`** — the controller returns `201 Created` with the persisted resource
+   (normalized amount + generated `event_date`) and a `Location` header.
+
+Any exception raised on the way is turned into an RFC 7807 `ProblemDetail` by the
+global handler (see [Error handling](#error-handling)).
+
+---
+
+## API reference
+
+Base URL: `http://localhost:8080`. All request/response fields use **snake_case**.
+
+### `POST /accounts` — create an account
+
+Request:
 
 ```bash
-./run.sh         # build + sobe app e Postgres (docker compose up --build)
-make up          # equivalente, via make
-make up-d        # o mesmo, em segundo plano
-make down        # derruba tudo
+curl -i -X POST http://localhost:8080/accounts \
+  -H 'Content-Type: application/json' \
+  -d '{ "document_number": "12345678900" }'
 ```
 
-A app fica disponível em `http://localhost:8080`. Verifique a saúde:
+`201 Created` — `Location: http://localhost:8080/accounts/1`
+
+```json
+{ "account_id": 1, "document_number": "12345678900" }
+```
+
+| Status | When |
+|:---:|---|
+| `201` | Account created |
+| `400` | `document_number` missing/blank or longer than 50 characters |
+
+### `GET /accounts/{accountId}` — fetch an account
 
 ```bash
-curl http://localhost:8080/actuator/health   # -> {"status":"UP", ...}
+curl -i http://localhost:8080/accounts/1
 ```
 
-Documentação interativa da API (Swagger UI) e o contrato OpenAPI:
+`200 OK`
 
-```
-http://localhost:8080/swagger-ui.html   # Swagger UI
-http://localhost:8080/v3/api-docs        # OpenAPI JSON
+```json
+{ "account_id": 1, "document_number": "12345678900" }
 ```
 
-### Desenvolvimento local (precisa de JDK 21)
+| Status | When |
+|:---:|---|
+| `200` | Account found |
+| `400` | `accountId` is not a valid number |
+| `404` | Account does not exist |
+
+### `POST /transactions` — create a transaction
+
+`amount` must be a **positive magnitude**; the stored sign is derived from the
+operation type.
 
 ```bash
-make run         # sobe só o Postgres e roda a app com bootRun
-make db-up       # sobe só o Postgres
-make db-down     # para o Postgres
+curl -i -X POST http://localhost:8080/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{ "account_id": 1, "operation_type_id": 1, "amount": 123.45 }'
 ```
 
-### Testes
+`201 Created` — `Location: http://localhost:8080/transactions/1`
 
-```bash
-make test        # suíte completa (unit + integração; precisa de Docker)
-make test-unit   # só os testes unitários rápidos (sem Docker)
-make retest      # re-roda tudo ignorando o cache "up-to-date" do Gradle
+```json
+{
+  "transaction_id": 1,
+  "account_id": 1,
+  "operation_type_id": 1,
+  "amount": -123.45,
+  "event_date": "2026-07-06T12:00:00Z"
+}
 ```
 
-Relatório HTML dos testes: `build/reports/tests/test/index.html`.
+Note that `NORMAL_PURCHASE` (id 1) normalized `123.45` to `-123.45`. A
+`CREDIT_VOUCHER` (id 4) would keep it positive.
 
-### Sem `make` (Gradle/Compose direto)
+Error responses follow a deliberate **precedence** (checked top to bottom):
+
+| Status | Condition |
+|:---:|---|
+| `400` | `account_id`, `operation_type_id` or `amount` missing (Bean Validation) |
+| `400` | `amount` has more digits than `NUMERIC(19,2)` allows |
+| `400` | `amount` is negative (positive magnitude required — a client contract error) |
+| `404` | `account_id` does not reference an existing account |
+| `422` | `operation_type_id` does not match any known operation type |
+| `422` | `amount` is zero (well-formed but not a valid business amount) |
+
+---
+
+## Error handling
+
+Every error — business or validation — is returned as an RFC 7807
+[`ProblemDetail`](https://www.rfc-editor.org/rfc/rfc7807) with content type
+`application/problem+json`. There is a single error format across the whole API.
+
+Business error (e.g. `404`):
+
+```json
+{
+  "type": "urn:problem-type:account-not-found",
+  "title": "Account not found",
+  "status": 404,
+  "detail": "Account 99999999 not found"
+}
+```
+
+Validation error (`400`) adds an `errors` array with the offending fields:
+
+```json
+{
+  "type": "urn:problem-type:validation-failed",
+  "title": "Validation failed",
+  "status": 400,
+  "detail": "Validation failed for one or more fields",
+  "errors": [
+    { "field": "document_number", "message": "must not be blank" }
+  ]
+}
+```
+
+| `type` (URN suffix) | Status | Raised when |
+|---|:---:|---|
+| `validation-failed` | 400 | Bean Validation failed (missing/oversized fields, too many digits) |
+| `negative-amount` | 400 | Transaction `amount` is negative |
+| `malformed-json` | 400 | Request body cannot be parsed |
+| `invalid-request-parameter` | 400 | Path/query parameter has the wrong type |
+| `account-not-found` | 404 | Referenced account does not exist |
+| `invalid-operation-type` | 422 | Unknown `operation_type_id` |
+| `invalid-transaction-amount` | 422 | Transaction `amount` is zero |
+
+---
+
+## Requirements
+
+What you need depends on **how** you want to run the project:
+
+| Scenario | Requirements |
+|---|---|
+| Run the whole app (`./run.sh` / `make up`) | Docker + Docker Compose (+ Git; `make` optional) |
+| Develop / run tests locally (`make test`, `make run`) | The above **+ JDK 21** |
+
+- **Docker must be running** for the tests (Testcontainers) and for `docker compose`.
+- **Gradle does not need to be installed** — the wrapper (`gradlew` / `gradlew.bat`)
+  downloads the pinned version automatically.
+- On **Windows**, `make` is not bundled: install it with `choco install make` or
+  `scoop install make` (optional — every target maps to a plain command).
+
+---
+
+## Running the application
+
+All commands are run from the project root.
+
+### Full stack in Docker (no local JDK required)
 
 ```bash
-./gradlew bootRun          # (Windows: .\gradlew.bat bootRun)
-./gradlew test
+./run.sh         # docker compose up --build (app + Postgres)
+make up          # same, via make
+make up-d        # same, detached (background)
+make down        # stop and remove the stack
+```
+
+The app is exposed on `http://localhost:8080`. Compose starts Postgres first, waits
+for its health check, and only then starts the app (`depends_on: service_healthy`).
+
+```bash
+curl http://localhost:8080/actuator/health     # -> {"status":"UP"}
+```
+
+Interactive documentation once the app is up:
+
+```
+http://localhost:8080/swagger-ui.html          # Swagger UI
+http://localhost:8080/v3/api-docs               # OpenAPI JSON
+```
+
+### Local development (requires JDK 21)
+
+```bash
+make run         # start Postgres, then run the app with bootRun
+make db-up       # start only Postgres (and wait until healthy)
+make db-down     # stop Postgres
+```
+
+### Without `make` (Gradle / Compose directly)
+
+```bash
+./gradlew bootRun          # Windows: .\gradlew.bat bootRun
 docker compose up --build
 ```
 
 ---
 
-## Estrutura do projeto
+## Testing
+
+```bash
+make test        # full suite (unit + integration; requires Docker)
+make test-unit   # fast unit tests only (no Docker)
+make retest      # re-run everything, bypassing Gradle's up-to-date cache
+./gradlew test   # equivalent to `make test`
+```
+
+An HTML report is written to `build/reports/tests/test/index.html`.
+
+Integration tests use **Testcontainers**, which starts a real `postgres:16.14-alpine`
+container per test class (so Docker must be running). This validates against the same
+database engine used in production, including the Flyway migrations and the Hibernate
+schema validation.
+
+### What is covered
+
+**Unit tests** (no Spring context / no Docker):
+
+- `OperationTypeTest` — amount-sign normalization for all four operation types
+  (including negative inputs), `fromId` resolution, and rejection of unknown ids.
+- `AccountTest` — constructor invariants: trims the document number, rejects
+  null/blank.
+- `TransactionTest` — constructor applies the correct sign and rejects null/zero
+  amounts.
+- `TransactionServiceTest` — service-level validation precedence with Mockito
+  (`400` before account lookup, `404` before operation type, `422` before save).
+
+**Integration tests** (Testcontainers + real Postgres, hitting real endpoints):
+
+- `HealthCheckIntegrationTest` — the context boots and `/actuator/health` returns 200.
+- `AccountControllerIntegrationTest` — account creation (`201` + `Location`), lookup
+  (`200`), `404` for a missing account, validation failures, non-unique document
+  numbers, and the `ProblemDetail` format.
+- `TransactionControllerIntegrationTest` — happy path (asserting the **normalized
+  sign** and a deterministic `event_date` via an injected fixed `Clock`) plus the full
+  error precedence (`400` / `404` / `422`).
+- `OpenApiDocumentationIntegrationTest` — the generated OpenAPI documents all three
+  endpoints with their status codes and schemas, Swagger UI is reachable, and Actuator
+  stays accessible.
+
+---
+
+## Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs a single job,
+`build-and-test`, on every **push** and **pull request**:
+
+- checks out the code, sets up **Temurin JDK 21** (with Gradle dependency caching),
+  and runs `./gradlew build` (compile + full test suite + jar assembly);
+- Testcontainers uses the Docker daemon already available on the `ubuntu-latest`
+  runner, so no extra services are declared;
+- Gradle comes from the wrapper, so CI uses the exact same version as local
+  development.
+
+There is no deploy step.
+
+---
+
+## Configuration
+
+The app reads the following environment variables (defaults target the Compose setup):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/transactions` | JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` | `transactions` | DB user |
+| `SPRING_DATASOURCE_PASSWORD` | `transactions` | DB password |
+| `MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS` | `never` | Health detail verbosity |
+
+JSON serialization is globally configured to **snake_case**
+(`spring.jackson.property-naming-strategy: SNAKE_CASE`), matching the API contract
+(`document_number`, `account_id`, `operation_type_id`, `event_date`).
+
+---
+
+## Project structure
 
 ```
 src/main/java/io/github/danmke/transactions/
-  api/            # controllers REST + DTOs      ✅
-    dto/
-  application/    # services de orquestração     ✅
-  domain/         # entidades + regra de negócio ✅
-  repository/     # acesso a dados              ✅
-  exception/      # tratamento de erros         ✅
-  config/         # configurações               ✅
+  api/            # REST controllers
+    dto/          # request/response DTOs
+  application/    # orchestration services
+  domain/         # entities, OperationType enum, JPA converter
+  repository/     # Spring Data JPA repositories
+  exception/      # business exceptions + GlobalExceptionHandler
+  config/         # ClockConfig, OpenApiConfig
 src/main/resources/
   application.yml
-  db/migration/   # V1__create_accounts, V2__create_operation_types, V3__create_transactions
-src/test/java/    # testes unitários e de integração
-Dockerfile        # build multi-stage
-docker-compose.yml
-Makefile          # atalhos de build/execução/testes
+  db/migration/   # Flyway: V1 accounts, V2 operation_types, V3 transactions
+src/test/java/    # unit and Testcontainers integration tests
+.github/workflows/ci.yml   # CI pipeline
+Dockerfile                 # multi-stage build
+docker-compose.yml         # app + Postgres
+run.sh                     # docker compose up --build
+Makefile                   # build/run/test shortcuts
 ```
 
 ---
 
-## Design decisions
+## Design highlights
 
-Registro incremental das decisões de projeto relevantes, organizado por fase.
-Atualizado à medida que cada fase introduz uma decisão.
-
-### Fase 1 — Walking skeleton
-
-- **Gradle wrapper (sem Gradle global):** o `gradlew`/`gradlew.bat` fixa e baixa
-  a versão exata do Gradle; ninguém precisa instalar Gradle na máquina.
-- **Health check via Actuator primeiro:** prova de vida ponta a ponta (app sobe,
-  conecta no banco, responde) antes de qualquer regra de negócio.
-- **Detalhes do health check seguros por padrão:** `show-details` fica como
-  `never` por default e pode ser sobrescrito via variável de ambiente quando
-  necessário em ambientes controlados.
-- **Docker multi-stage, build sem testes:** o estágio de build roda `bootJar`
-  (não `build`), evitando exigir Docker-in-Docker; os testes de integração com
-  Testcontainers rodam localmente / na pipeline, onde há um Docker acessível.
-- **Testcontainers para integração:** os testes sobem um PostgreSQL **real**
-  (mesma engine de produção) em vez de um banco em memória (H2), evitando
-  divergências de comportamento.
-
-### Fase 2 — Domínio e migrations
-
-- **JPA introduzido só nesta fase:** a Fase 1 usava apenas o datasource; a
-  dependência de JPA entra na fase que de fato a usa (não antecipar).
-- **Chaves primárias `BIGINT` identity:** geradas pelo banco
-  (`GENERATED ALWAYS AS IDENTITY`) — simples e sequenciais; a aplicação nunca
-  define o id.
-- **`OperationType` como enum de código + `AttributeConverter`:** não é entidade
-  JPA e não tem repository; a tabela `operation_types` existe **só para a FK**.
-  Um converter mapeia `enum ↔ operation_type_id`, preservando integridade
-  referencial sem transformar o tipo num agregado consultável.
-- **Dinheiro como `NUMERIC(19,2)` → `BigDecimal`; data como `TIMESTAMPTZ` →
-  `OffsetDateTime`:** evita erros de ponto flutuante em valores monetários e
-  ambiguidade de fuso horário.
-- **Flyway como fonte única da verdade + `ddl-auto: validate`:** as migrations
-  versionadas criam e semeiam o schema; o Hibernate apenas **valida** as
-  entidades contra ele na subida, nunca altera o schema.
-- **Invariantes garantidas nos construtores do domínio:** a normalização do
-  sinal (`operationType.normalize(amount)`) e as validações defensivas
-  (`amount` não nulo/zero; `document_number` não vazio, com `trim()`) acontecem
-  **dentro** dos construtores de `Transaction` e `Account`. Assim é impossível
-  instanciar uma entidade em estado inválido, independentemente de quem a cria.
-  A validação "de negócio" que gera resposta HTTP fica para o service (Fase 5).
-- **`CHECK` constraints no banco (`amount <> 0`,
-  `btrim(document_number) <> ''`):** defesa em profundidade, além da validação
-  no domínio.
-- **`document_number` sem `UNIQUE`:** decisão explícita de não impor unicidade
-  nesta fase.
-
-### Fase 3 — POST /accounts
-
-- **JSON em snake_case global** (`spring.jackson.property-naming-strategy:
-  SNAKE_CASE`): o desafio especifica campos como `document_number` /
-  `account_id`; configurar globalmente evita `@JsonProperty` espalhado pelos
-  DTOs.
-- **Validação no DTO espelha a coluna do banco** (`@Size(max = 50)` casa com
-  `VARCHAR(50)`): sem isso, um documento acima do limite viraria erro **500** do
-  banco em vez de **400** da aplicação. `@NotBlank` cobre ausência/branco.
-- **DTOs dedicados em `api/dto/`** (`CreateAccountRequest`, `AccountResponse`),
-  como `record`s: a entidade JPA nunca é serializada direto na resposta; o
-  controller faz o mapeamento, mantendo `domain` livre de HTTP.
-- **`AccountService` recebe primitivos, não DTOs:** os DTOs ficam confinados em
-  `api/`; a camada `application` orquestra sobre o domínio.
-- **`201 Created` + header `Location`** apontando para `/accounts/{id}` (o `GET`
-  correspondente entra numa fase futura; aqui só emitimos o header).
-- **Erros de validação usam o `400` padrão do Spring:** um handler de erro
-  formatado é escopo de fase futura (`exception/`).
-
-### Fase 4 — GET /accounts/{id} e tratamento de erro
-
-- **`ProblemDetail` (RFC 7807) como formato único de erro:** um
-  `@RestControllerAdvice` (`GlobalExceptionHandler`) que estende
-  `ResponseEntityExceptionHandler` centraliza as respostas de erro. Tanto o
-  erro de negócio (**404**) quanto os de Bean Validation (**400**) saem no
-  mesmo formato — a API nunca expõe dois formatos de erro diferentes.
-- **`title` e `type` explícitos nos problemas:** cada erro recebe um título
-  estável e um `type` no formato `urn:problem-type:*`, facilitando testes,
-  documentação e interpretação por clientes.
-- **`handleMethodArgumentNotValid` sobrescrito:** converte os erros de campo do
-  Bean Validation num `ProblemDetail`, com uma extensão `errors` (lista de
-  `{ field, message }`) para o cliente saber exatamente o que falhou.
-- **Erros comuns de infraestrutura HTTP também padronizados:** JSON malformado
-  (`handleHttpMessageNotReadable`) e path/query parameter com tipo inválido
-  (`handleTypeMismatch`, como `GET /accounts/abc`) também retornam
-  `ProblemDetail` com **400**.
-- **Exceptions de negócio em `exception/`, lançadas pelo service:**
-  `AccountService.getById` lança `AccountNotFoundException` quando a conta não
-  existe; o handler a mapeia para 404. A decisão "existe ou estoura" fica na
-  camada `application`, não no controller.
-- **`getById` semântico:** retorna o domínio ou lança — em vez de devolver
-  `Optional`/`null` e empurrar a decisão de status para o controller.
-
-### Fase 5 — POST /transactions
-
-- **Precedência explícita de validação/erro** (do payload ao negócio): campos
-  ausentes e `amount` fora de `@Digits(integer = 17, fraction = 2)` → **400**
-  (Bean Validation); `amount` negativo → **400**; conta inexistente → **404**;
-  `operation_type_id` desconhecido → **422**; `amount` zero → **422**. O
-  `TransactionService` implementa exatamente essa ordem.
-- **Sinal negativo é erro de contrato (400), não de negócio:** a API só aceita
-  magnitude positiva — o sinal é derivado do tipo de operação. Zero, por outro
-  lado, é regra de negócio → **422**.
-- **`IllegalArgumentException` de `fromId()` convertida explicitamente** em
-  `InvalidOperationTypeException` dentro do service. Não se mapeia
-  `IllegalArgumentException` genericamente no handler, senão as validações
-  defensivas de domínio (Fase 2) seriam capturadas e classificadas como 422
-  por engano.
-- **`Clock` injetável (`ClockConfig`):** o `event_date` vem de
-  `OffsetDateTime.now(clock)` — `Clock.systemUTC()` em produção, `Clock.fixed`
-  nos testes, tornando o carimbo de tempo determinístico e testável.
-- **Resposta com o estado final, não eco do input:** `TransactionResponse`
-  devolve o `amount` já **normalizado** (sinal aplicado pela entidade) e o
-  `event_date` gerado — o cliente vê o que foi de fato persistido.
-- **`201 Created` + `Location` em transactions:** mesmo sem um `GET
-  /transactions/{id}` no escopo do PDF, o endpoint retorna o identificador do
-  recurso criado em `Location` por consistência com `POST /accounts` e com o
-  estilo REST.
-- **A normalização permanece no domínio:** o service valida e delega; quem
-  aplica o sinal é o construtor de `Transaction` (Fase 2), não o service.
-
-### Fase 6 — Documentação de API
-
-- **springdoc-openapi (Swagger UI) com versão pinada** (`2.8.9`): a dependência
-  entra só nesta fase e não é gerenciada pelo BOM do Spring Boot, então a
-  versão é fixada explicitamente. Swagger UI em `/swagger-ui.html`, contrato em
-  `/v3/api-docs`.
-- **Status de erro documentados por anotação:** o springdoc infere 200/201 e os
-  DTOs, mas não os 400/404/422 (que vêm do `GlobalExceptionHandler`). Por isso
-  os controllers declaram `@ApiResponses` com `ProblemDetail` como schema de
-  erro, e os DTOs trazem `@Schema(example = ...)`.
-- **`OpenApiConfig` apenas com metadados reais** (título, versão, descrição) —
-  não uma classe vazia só para preencher a estrutura de pastas.
-- **Actuator preservado:** o springdoc não documenta o Actuator por padrão;
-  `/actuator/health` continua acessível (coberto por teste).
-
-### Fase 7 — CI
-
-- **GitHub Actions com um único job (`build-and-test`)** a cada push e pull
-  request: `./gradlew build` compila, testa (inclusive os de Testcontainers) e
-  monta o jar. Sem deploy nem outros jobs.
-- **Testcontainers no runner sem serviços extras:** o `ubuntu-latest` já tem
-  Docker em execução, então os testes de integração sobem seus próprios
-  containers — não é preciso declarar `services:` no workflow.
-- **Versões consistentes com o projeto:** JDK 21 via `setup-java`; o Gradle
-  8.14.5 vem do wrapper, então a CI usa exatamente a mesma versão do
-  desenvolvimento.
-
-### Fase 8 — run.sh e containerização
-
-- **`run.sh` como ponto de entrada único:** `docker compose up --build` (CLI
-  v2, com espaço) — sobe app + Postgres com um comando, sem exigir JDK/Gradle
-  local.
-- **Bit executável preservado no Git** via `git update-index --chmod=+x run.sh`
-  (mode `100755`), já que o repositório tem origem Windows, onde o bit não é
-  capturado do filesystem.
-- **`.gitattributes` força LF em scripts de shell** (`*.sh`, `gradlew`): sem
-  isso, o `core.autocrlf` no Windows converteria o `run.sh` para CRLF no
-  checkout e o interpretador falharia no Linux/CI/Docker. Batch files (`*.bat`)
-  permanecem CRLF.
-- **Containerização revisada:** Postgres com healthcheck (`pg_isready`) e app
-  com `depends_on: condition: service_healthy` — a app só inicia após o banco
-  estar pronto. Validado subindo o stack e confirmando `/actuator/health` = UP.
+- **Sign normalization lives in the domain.** `Transaction`'s constructor applies
+  `OperationType.normalize(amount)`, so it is impossible to build a transaction with
+  the wrong sign, regardless of the caller.
+- **Positive-magnitude contract.** The API only accepts a positive `amount`; a
+  negative value is a client contract error (`400`), while a zero amount is a business
+  rule violation (`422`).
+- **`OperationType` is a code enum, not an entity.** The lookup table exists solely
+  for referential integrity; an `AttributeConverter` maps the enum to its id.
+- **Single error format.** A `@RestControllerAdvice` extending
+  `ResponseEntityExceptionHandler` renders every error as a `ProblemDetail`, so
+  validation (`400`) and business errors (`404`/`422`) never diverge in shape.
+- **Deterministic time.** `event_date` comes from an injectable `Clock`
+  (`Clock.systemUTC()` in production, a fixed clock in tests).
+- **Flyway owns the schema; Hibernate only validates it.** Migrations are the source
+  of truth; `ddl-auto=validate` catches entity/schema drift at startup.

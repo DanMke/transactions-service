@@ -66,7 +66,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "validation-failed");
 
         List<ValidationError> errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(fieldError -> new ValidationError(fieldError.getField(), fieldError.getDefaultMessage()))
+                .map(fieldError -> new ValidationError(toSnakeCase(fieldError.getField()), fieldError.getDefaultMessage()))
                 .toList();
         problem.setProperty("errors", errors);
 
@@ -110,6 +110,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setTitle(title);
         problem.setType(URI.create("urn:problem-type:" + type));
         return problem;
+    }
+
+    private String toSnakeCase(String fieldName) {
+        return fieldName.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
     }
 
     private record ValidationError(String field, String message) {

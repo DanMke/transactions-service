@@ -66,7 +66,7 @@ public class AccountController {
                                       "detail": "Validation failed for one or more fields",
                                       "errors": [
                                         {
-                                          "field": "documentNumber",
+                                          "field": "document_number",
                                           "message": "must not be blank"
                                         }
                                       ]

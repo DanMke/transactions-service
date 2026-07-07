@@ -115,6 +115,7 @@ class AccountControllerIntegrationTest {
 
         JsonNode body = assertValidationProblemDetail(response, HttpStatus.BAD_REQUEST);
         assertThat(body.get("title").asText()).isEqualTo("Validation failed");
+        assertThat(body.get("errors").get(0).get("field").asText()).isEqualTo("document_number");
     }
 
     @Test
