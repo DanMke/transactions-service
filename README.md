@@ -508,7 +508,7 @@ The provisioned Grafana dashboard includes:
 - average HTTP latency by endpoint;
 - JVM memory usage;
 - JVM live/daemon threads;
-- HikariCP active/idle/pending connections;
+- HikariCP active/idle/pending connections and connection timeouts;
 - transaction rate and distribution by operation type.
 
 ---
@@ -542,11 +542,20 @@ The app reads the following environment variables (defaults target the Compose s
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/transactions` | JDBC URL |
 | `SPRING_DATASOURCE_USERNAME` | `transactions` | DB user |
 | `SPRING_DATASOURCE_PASSWORD` | `transactions` | DB password |
+| `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` | `10` | Maximum database connections in the HikariCP pool |
+| `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE` | `2` | Minimum idle database connections kept by HikariCP |
+| `SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT` | `30000` | Max time in milliseconds to wait for a connection from the pool |
+| `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT` | `600000` | Max idle time in milliseconds before an idle connection can be retired |
+| `SPRING_DATASOURCE_HIKARI_MAX_LIFETIME` | `1800000` | Max lifetime in milliseconds for a pooled connection |
 | `MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS` | `never` | Health detail verbosity |
 
 JSON serialization is globally configured to **snake_case**
 (`spring.jackson.property-naming-strategy: SNAKE_CASE`), matching the API contract
 (`document_number`, `account_id`, `operation_type_id`, `event_date`).
+
+HikariCP values are intentionally conservative and configurable rather than tuned
+aggressively. In a real environment, pool sizing should be adjusted with load-test
+data and metrics such as active, pending and timed-out connections.
 
 ---
 
