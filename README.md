@@ -13,6 +13,8 @@ derived from the operation type.
 - **OpenAPI contract:** `http://localhost:8080/v3/api-docs`
 - **Health:** `http://localhost:8080/actuator/health`
 - **Prometheus metrics:** `http://localhost:8080/actuator/prometheus`
+- **Prometheus UI (optional):** `http://localhost:9090`
+- **Grafana dashboard (optional):** `http://localhost:3000`
 
 ---
 
@@ -91,6 +93,8 @@ flowchart LR
 | PostgreSQL | 16.14 (image `postgres:16.14-alpine`) |
 | springdoc-openapi (Swagger UI) | 2.8.9 |
 | Micrometer Prometheus registry | Managed by the Spring Boot BOM |
+| Prometheus (optional UI/TSDB) | 3.13.0 |
+| Grafana (optional dashboard) | 13.1.0 |
 | Flyway, Hibernate, JUnit 5, Testcontainers | Managed by the Spring Boot BOM |
 | Docker Engine | Any recent release (min API 1.40) |
 
@@ -339,6 +343,38 @@ http://localhost:8080/swagger-ui.html          # Swagger UI
 http://localhost:8080/v3/api-docs               # OpenAPI JSON
 ```
 
+### Optional observability stack
+
+The default stack stays small: app + Postgres. To also start Prometheus and Grafana:
+
+```bash
+make observability-up      # foreground
+make observability-up-d    # detached
+make observability-ps      # status
+make observability-logs    # logs
+make observability-down    # stop and remove containers/volumes
+```
+
+Equivalent plain Docker Compose command:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up --build
+```
+
+Once it is running:
+
+| Tool | URL | Notes |
+|---|---|---|
+| Application | `http://localhost:8080` | REST API |
+| Prometheus | `http://localhost:9090` | Scrapes `app:8080/actuator/prometheus` every 5 seconds |
+| Grafana | `http://localhost:3000` | Login `admin` / `admin`; dashboard is provisioned automatically |
+
+Open Grafana and navigate to:
+
+```text
+Dashboards -> Transactions Service -> Transactions Service Overview
+```
+
 ### Local development (requires JDK 21)
 
 ```bash
@@ -440,6 +476,18 @@ The application exposes operational endpoints through Spring Boot Actuator:
 | `/actuator/health` | Liveness/readiness-style health check used by Docker Compose |
 | `/actuator/prometheus` | Prometheus scrape endpoint with JVM, HTTP, datasource and custom business metrics |
 
+The optional observability stack adds Prometheus and Grafana on top of that endpoint:
+
+```mermaid
+flowchart LR
+    app["transactions-service<br/>/actuator/prometheus"]
+    prometheus["Prometheus<br/>scrape + time series"]
+    grafana["Grafana<br/>provisioned dashboard"]
+
+    prometheus -->|scrapes every 5s| app
+    grafana -->|queries PromQL| prometheus
+```
+
 Custom business counters are intentionally small and low-cardinality:
 
 | Metric | Tags | Meaning |
@@ -451,6 +499,17 @@ Custom business counters are intentionally small and low-cardinality:
 The custom metrics avoid user identifiers such as `account_id`, `document_number` or
 `transaction_id` as tags. This keeps cardinality bounded and avoids exposing sensitive
 business data through metrics.
+
+The provisioned Grafana dashboard includes:
+
+- account and transaction totals;
+- transaction failures by reason;
+- HTTP request rate by endpoint/status;
+- average HTTP latency by endpoint;
+- JVM memory usage;
+- JVM live/daemon threads;
+- HikariCP active/idle/pending connections;
+- transaction rate and distribution by operation type.
 
 ---
 
@@ -507,9 +566,13 @@ src/main/resources/
   application.yml
   db/migration/   # Flyway: V1 accounts, V2 operation_types, V3 transactions
 src/test/java/    # unit, WebMvc and Testcontainers integration tests
+observability/
+  prometheus/     # Prometheus scrape config
+  grafana/        # Grafana datasource and dashboard provisioning
 .github/workflows/ci.yml   # CI pipeline
 Dockerfile                 # multi-stage build
 docker-compose.yml         # app + Postgres
+docker-compose.observability.yml # optional Prometheus + Grafana
 run.sh                     # docker compose up --build
 Makefile                   # build/run/test shortcuts
 ```

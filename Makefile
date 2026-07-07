@@ -9,10 +9,11 @@ else
 endif
 
 COMPOSE := docker compose
+OBS_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.observability.yml
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build jar test test-unit retest clean db-up db-down run up up-d down logs ps
+.PHONY: help build jar test test-unit retest clean db-up db-down run up up-d down logs ps observability-up observability-up-d observability-down observability-logs observability-ps
 
 help:
 	@echo Available targets:
@@ -29,6 +30,11 @@ help:
 	@echo   make down       - Stop and remove the Docker stack
 	@echo   make logs       - Follow logs of the Docker stack
 	@echo   make ps         - Show status of the Docker stack
+	@echo   make observability-up    - Run app + Postgres + Prometheus + Grafana
+	@echo   make observability-up-d  - Run observability stack detached
+	@echo   make observability-down  - Stop and remove observability stack
+	@echo   make observability-logs  - Follow observability stack logs
+	@echo   make observability-ps    - Show observability stack status
 	@echo   make clean      - Clean Gradle build output and tear down Docker
 
 build:
@@ -69,6 +75,21 @@ logs:
 
 ps:
 	$(COMPOSE) ps
+
+observability-up:
+	$(OBS_COMPOSE) up --build
+
+observability-up-d:
+	$(OBS_COMPOSE) up --build -d
+
+observability-down:
+	$(OBS_COMPOSE) down -v
+
+observability-logs:
+	$(OBS_COMPOSE) logs -f
+
+observability-ps:
+	$(OBS_COMPOSE) ps
 
 clean:
 	$(GRADLEW) clean
