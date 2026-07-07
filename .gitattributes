@@ -1,0 +1,9 @@
+# Executable shell scripts and the Gradle wrapper must keep LF endings on every
+# platform (Windows included); otherwise the interpreter fails on carriage
+# returns when they run on Linux/macOS/CI or inside Docker.
+*.sh        text eol=lf
+gradlew     text eol=lf
+
+# Windows batch files must keep CRLF.
+*.bat       text eol=crlf
+gradlew.bat text eol=crlf

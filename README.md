@@ -102,7 +102,8 @@ Todos os comandos partem da raiz do projeto. A forma recomendada é via `make`
 ### Aplicação completa em Docker (não precisa de JDK)
 
 ```bash
-make up          # build + sobe app e Postgres (foreground)
+./run.sh         # build + sobe app e Postgres (docker compose up --build)
+make up          # equivalente, via make
 make up-d        # o mesmo, em segundo plano
 make down        # derruba tudo
 ```
@@ -317,3 +318,19 @@ Atualizado à medida que cada fase introduz uma decisão.
 - **Versões consistentes com o projeto:** JDK 21 via `setup-java`; o Gradle
   8.14.5 vem do wrapper, então a CI usa exatamente a mesma versão do
   desenvolvimento.
+
+### Fase 8 — run.sh e containerização
+
+- **`run.sh` como ponto de entrada único:** `docker compose up --build` (CLI
+  v2, com espaço) — sobe app + Postgres com um comando, sem exigir JDK/Gradle
+  local.
+- **Bit executável preservado no Git** via `git update-index --chmod=+x run.sh`
+  (mode `100755`), já que o repositório tem origem Windows, onde o bit não é
+  capturado do filesystem.
+- **`.gitattributes` força LF em scripts de shell** (`*.sh`, `gradlew`): sem
+  isso, o `core.autocrlf` no Windows converteria o `run.sh` para CRLF no
+  checkout e o interpretador falharia no Linux/CI/Docker. Batch files (`*.bat`)
+  permanecem CRLF.
+- **Containerização revisada:** Postgres com healthcheck (`pg_isready`) e app
+  com `depends_on: condition: service_healthy` — a app só inicia após o banco
+  estar pronto. Validado subindo o stack e confirmando `/actuator/health` = UP.
