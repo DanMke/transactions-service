@@ -27,6 +27,7 @@ derived from the operation type.
 - [Running the application](#running-the-application)
 - [Testing](#testing)
 - [Continuous integration](#continuous-integration)
+- [Production considerations](#production-considerations)
 - [Configuration](#configuration)
 - [Project structure](#project-structure)
 - [Design highlights](#design-highlights)
@@ -363,32 +364,44 @@ make retest      # re-run everything, bypassing Gradle's up-to-date cache
 An HTML report is written to `build/reports/tests/test/index.html`.
 
 Integration tests use **Testcontainers**, which starts a real `postgres:16.14-alpine`
-container per test class (so Docker must be running). This validates against the same
-database engine used in production, including the Flyway migrations and the Hibernate
-schema validation.
+container. A single container is shared across all integration classes
+(singleton-container pattern), so Docker must be running. This validates against the
+same database engine used in production, including the Flyway migrations and the
+Hibernate schema validation.
+
+Because the container is shared by the whole integration suite, integration tests
+create their own data and do not depend on an empty database, global row counts, or
+specific identity values.
 
 ### What is covered
+
+The suite follows a test pyramid — many fast tests, few slow ones, each layer owning a
+distinct question.
 
 **Unit tests** (no Spring context / no Docker):
 
 - `OperationTypeTest` — amount-sign normalization for all four operation types
   (including negative inputs), `fromId` resolution, and rejection of unknown ids.
-- `AccountTest` — constructor invariants: trims the document number, rejects
-  null/blank.
-- `TransactionTest` — constructor applies the correct sign and rejects null/zero
-  amounts.
-- `TransactionServiceTest` — service-level validation precedence with Mockito
+- `AccountTest` / `TransactionTest` — entity constructor invariants (document trimming,
+  and rejection of null/blank/zero).
+- `TransactionServiceTest` — the service-level validation precedence with Mockito
   (`400` before account lookup, `404` before operation type, `422` before save).
 
-**Integration tests** (Testcontainers + real Postgres, hitting real endpoints):
+**Web-slice tests** (`@WebMvcTest`, mocked service — no full context, no Docker):
+
+- `AccountControllerWebMvcTest` / `TransactionControllerWebMvcTest` — own the
+  validation/error matrix for each endpoint: missing/oversized fields, malformed JSON,
+  non-numeric path variables, and the `ProblemDetail` mapping for every business error
+  (`400` / `404` / `422`). Fast, with the failure signal isolated to the web layer.
+
+**Integration tests** (Testcontainers + real Postgres, over the HTTP wire):
 
 - `HealthCheckIntegrationTest` — the context boots and `/actuator/health` returns 200.
-- `AccountControllerIntegrationTest` — account creation (`201` + `Location`), lookup
-  (`200`), `404` for a missing account, validation failures, non-unique document
-  numbers, and the `ProblemDetail` format.
-- `TransactionControllerIntegrationTest` — happy path (asserting the **normalized
-  sign** and a deterministic `event_date` via an injected fixed `Clock`) plus the full
-  error precedence (`400` / `404` / `422`).
+- `AccountControllerIntegrationTest` — persistence round-trip (create then read back),
+  non-unique document numbers, and one `ProblemDetail` error over the wire.
+- `TransactionControllerIntegrationTest` — the sign-normalization pipeline persisted
+  end to end (negative purchase and positive voucher) with a deterministic `event_date`
+  via an injected fixed `Clock`, plus one business error over the wire.
 - `OpenApiDocumentationIntegrationTest` — the generated OpenAPI documents all three
   endpoints with their status codes and schemas, Swagger UI is reachable, and Actuator
   stays accessible.
@@ -408,6 +421,26 @@ schema validation.
   development.
 
 There is no deploy step.
+
+---
+
+## Production considerations
+
+The current implementation deliberately stays within the scope of the technical case.
+For a real payment/transaction service, the first production extensions would be:
+
+- **Idempotency for `POST /transactions`.** Network retries, client timeouts, or
+  gateway retries can duplicate non-idempotent requests. A production API should
+  accept an `Idempotency-Key`, persist it with a request hash and final response, and
+  enforce uniqueness per account/client scope.
+- **Concurrency rules if balances or limits are introduced.** The current model is
+  append-only, so concurrent inserts are safe for the behavior required by the case.
+  If the service later maintains account balances, credit limits, or available funds,
+  updates must use an explicit strategy such as optimistic locking, pessimistic
+  locking, or atomic conditional updates at the database level.
+- **Container reproducibility.** The runtime image uses the Java 21 Alpine tag so it
+  receives future Java 21 patch updates automatically. For regulated production
+  environments, pinning the image by digest would provide fully reproducible builds.
 
 ---
 

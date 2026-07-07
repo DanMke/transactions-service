@@ -3,11 +3,6 @@ package io.github.danmke.transactions.domain;
 import java.math.BigDecimal;
 import java.util.Objects;
 
-/**
- * Code-level enum for the supported operation types. The {@code operation_types}
- * table exists only to back the foreign key on {@code transactions}; this enum is
- * NOT a queryable JPA entity and has no repository.
- */
 public enum OperationType {
 
     NORMAL_PURCHASE(1, false),
@@ -27,11 +22,6 @@ public enum OperationType {
         return id;
     }
 
-    /**
-     * Applies the correct sign to a monetary amount for this operation type,
-     * always starting from the absolute value: purchases and withdrawals become
-     * negative, credit vouchers become positive.
-     */
     public BigDecimal normalize(BigDecimal amount) {
         BigDecimal magnitude = Objects.requireNonNull(amount, "Amount must not be null").abs();
         return positive ? magnitude : magnitude.negate();

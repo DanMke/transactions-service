@@ -34,7 +34,6 @@ public class Transaction {
     private OffsetDateTime eventDate;
 
     protected Transaction() {
-        // required by JPA
     }
 
     public Transaction(Long accountId, OperationType operationType, BigDecimal amount, OffsetDateTime eventDate) {

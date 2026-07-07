@@ -13,12 +13,10 @@ class OperationTypeTest {
 
     @ParameterizedTest
     @CsvSource({
-        // purchases and withdrawal must become negative, voucher positive
         "NORMAL_PURCHASE,      123.45, -123.45",
         "INSTALLMENT_PURCHASE, 100.00, -100.00",
         "WITHDRAWAL,            50.00,  -50.00",
         "CREDIT_VOUCHER,        60.00,   60.00",
-        // sign is always derived from the absolute value, regardless of input sign
         "NORMAL_PURCHASE,     -123.45, -123.45",
         "CREDIT_VOUCHER,       -60.00,   60.00"
     })

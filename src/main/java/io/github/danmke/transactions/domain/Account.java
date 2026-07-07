@@ -20,7 +20,6 @@ public class Account {
     private String documentNumber;
 
     protected Account() {
-        // required by JPA
     }
 
     public Account(String documentNumber) {

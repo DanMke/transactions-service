@@ -35,69 +35,27 @@ public class TransactionController {
 
     @Operation(summary = "Create a transaction",
             description = "Amount must be a positive magnitude; the sign is derived from the operation type.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            required = true,
-            content = @Content(
-                    schema = @Schema(implementation = CreateTransactionRequest.class),
-                    examples = @ExampleObject(name = "Create transaction request", value = """
-                            {
-                              "account_id": 1,
-                              "operation_type_id": 1,
-                              "amount": 123.45
-                            }
-                            """)))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+            content = @Content(schema = @Schema(implementation = CreateTransactionRequest.class),
+                    examples = @ExampleObject(name = "Create transaction request",
+                            value = OpenApiExamples.CREATE_TRANSACTION_REQUEST)))
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Transaction created",
-                    content = @Content(
-                            schema = @Schema(implementation = TransactionResponse.class),
-                            examples = @ExampleObject(name = "Transaction created", value = """
-                                    {
-                                      "transaction_id": 1,
-                                      "account_id": 1,
-                                      "operation_type_id": 1,
-                                      "amount": -123.45,
-                                      "event_date": "2026-07-06T12:00:00Z"
-                                    }
-                                    """))),
+                    content = @Content(schema = @Schema(implementation = TransactionResponse.class),
+                            examples = @ExampleObject(name = "Transaction created",
+                                    value = OpenApiExamples.TRANSACTION_RESPONSE))),
             @ApiResponse(responseCode = "400", description = "Invalid payload (missing/oversized fields) or negative amount",
-                    content = @Content(
-                            schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(name = "Invalid payload", value = """
-                                    {
-                                      "type": "urn:problem-type:validation-failed",
-                                      "title": "Validation failed",
-                                      "status": 400,
-                                      "detail": "Validation failed for one or more fields",
-                                      "errors": [
-                                        {
-                                          "field": "account_id",
-                                          "message": "must not be null"
-                                        }
-                                      ]
-                                    }
-                                    """))),
+                    content = @Content(schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "Invalid payload",
+                                    value = OpenApiExamples.TRANSACTION_VALIDATION_ERROR))),
             @ApiResponse(responseCode = "404", description = "Account not found",
-                    content = @Content(
-                            schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(name = "Account not found", value = """
-                                    {
-                                      "type": "urn:problem-type:account-not-found",
-                                      "title": "Account not found",
-                                      "status": 404,
-                                      "detail": "Account 99999999 not found"
-                                    }
-                                    """))),
+                    content = @Content(schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "Account not found",
+                                    value = OpenApiExamples.ACCOUNT_NOT_FOUND))),
             @ApiResponse(responseCode = "422", description = "Unknown operation type or zero amount",
-                    content = @Content(
-                            schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(name = "Invalid operation type", value = """
-                                    {
-                                      "type": "urn:problem-type:invalid-operation-type",
-                                      "title": "Invalid operation type",
-                                      "status": 422,
-                                      "detail": "Operation type 99 does not exist"
-                                    }
-                                    """)))
+                    content = @Content(schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "Invalid operation type",
+                                    value = OpenApiExamples.INVALID_OPERATION_TYPE)))
     })
     @PostMapping
     public ResponseEntity<TransactionResponse> create(@Valid @RequestBody CreateTransactionRequest request) {

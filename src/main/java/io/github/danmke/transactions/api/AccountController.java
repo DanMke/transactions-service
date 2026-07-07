@@ -36,42 +36,19 @@ public class AccountController {
     }
 
     @Operation(summary = "Create an account")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            required = true,
-            content = @Content(
-                    schema = @Schema(implementation = CreateAccountRequest.class),
-                    examples = @ExampleObject(name = "Create account request", value = """
-                            {
-                              "document_number": "12345678900"
-                            }
-                            """)))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+            content = @Content(schema = @Schema(implementation = CreateAccountRequest.class),
+                    examples = @ExampleObject(name = "Create account request",
+                            value = OpenApiExamples.CREATE_ACCOUNT_REQUEST)))
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Account created",
-                    content = @Content(
-                            schema = @Schema(implementation = AccountResponse.class),
-                            examples = @ExampleObject(name = "Account created", value = """
-                                    {
-                                      "account_id": 1,
-                                      "document_number": "12345678900"
-                                    }
-                                    """))),
+                    content = @Content(schema = @Schema(implementation = AccountResponse.class),
+                            examples = @ExampleObject(name = "Account created",
+                                    value = OpenApiExamples.ACCOUNT_RESPONSE))),
             @ApiResponse(responseCode = "400", description = "Validation error",
-                    content = @Content(
-                            schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(name = "Validation error", value = """
-                                    {
-                                      "type": "urn:problem-type:validation-failed",
-                                      "title": "Validation failed",
-                                      "status": 400,
-                                      "detail": "Validation failed for one or more fields",
-                                      "errors": [
-                                        {
-                                          "field": "document_number",
-                                          "message": "must not be blank"
-                                        }
-                                      ]
-                                    }
-                                    """)))
+                    content = @Content(schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "Validation error",
+                                    value = OpenApiExamples.ACCOUNT_VALIDATION_ERROR)))
     })
     @PostMapping
     public ResponseEntity<AccountResponse> create(@Valid @RequestBody CreateAccountRequest request) {
@@ -88,36 +65,17 @@ public class AccountController {
     @Operation(summary = "Get an account by id")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Account found",
-                    content = @Content(
-                            schema = @Schema(implementation = AccountResponse.class),
-                            examples = @ExampleObject(name = "Account found", value = """
-                                    {
-                                      "account_id": 1,
-                                      "document_number": "12345678900"
-                                    }
-                                    """))),
+                    content = @Content(schema = @Schema(implementation = AccountResponse.class),
+                            examples = @ExampleObject(name = "Account found",
+                                    value = OpenApiExamples.ACCOUNT_RESPONSE))),
             @ApiResponse(responseCode = "400", description = "Invalid account id",
-                    content = @Content(
-                            schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(name = "Invalid account id", value = """
-                                    {
-                                      "type": "urn:problem-type:invalid-request-parameter",
-                                      "title": "Invalid request parameter",
-                                      "status": 400,
-                                      "detail": "Request parameter has an invalid type"
-                                    }
-                                    """))),
+                    content = @Content(schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "Invalid account id",
+                                    value = OpenApiExamples.INVALID_ACCOUNT_ID))),
             @ApiResponse(responseCode = "404", description = "Account not found",
-                    content = @Content(
-                            schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(name = "Account not found", value = """
-                                    {
-                                      "type": "urn:problem-type:account-not-found",
-                                      "title": "Account not found",
-                                      "status": 404,
-                                      "detail": "Account 99999999 not found"
-                                    }
-                                    """)))
+                    content = @Content(schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "Account not found",
+                                    value = OpenApiExamples.ACCOUNT_NOT_FOUND)))
     })
     @GetMapping("/{accountId}")
     public AccountResponse getById(@PathVariable Long accountId) {

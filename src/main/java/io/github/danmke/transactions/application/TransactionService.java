@@ -30,7 +30,6 @@ public class TransactionService {
 
     @Transactional
     public Transaction create(Long accountId, Integer operationTypeId, BigDecimal amount) {
-        // Precedence matters: sign (400) -> account (404) -> operation type (422) -> zero (422).
         if (amount.signum() < 0) {
             throw new NegativeAmountNotAllowedException(amount);
         }
@@ -51,8 +50,6 @@ public class TransactionService {
         try {
             return OperationType.fromId(operationTypeId);
         } catch (IllegalArgumentException ex) {
-            // Convert explicitly so we don't blanket-map IllegalArgumentException in the
-            // handler, which would also catch the domain's defensive validations.
             throw new InvalidOperationTypeException(operationTypeId);
         }
     }

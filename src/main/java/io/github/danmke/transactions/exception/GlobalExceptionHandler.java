@@ -16,11 +16,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import java.net.URI;
 import java.util.List;
 
-/**
- * Centralizes error responses so the whole API speaks a single format:
- * RFC 7807 {@link ProblemDetail} (Spring 6). Both business errors (404) and
- * Bean Validation errors (400) are rendered the same way.
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
