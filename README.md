@@ -7,7 +7,8 @@ positivo.
 
 > **Estado atual:** contas (`POST /accounts`, `GET /accounts/{id}`) e
 > transações (`POST /transactions`) implementadas, com tratamento de erro
-> unificado via `ProblemDetail`. Veja o desenho abaixo.
+> unificado via `ProblemDetail` e documentação OpenAPI/Swagger. Veja o
+> desenho abaixo.
 
 ---
 
@@ -108,6 +109,13 @@ A app fica disponível em `http://localhost:8080`. Verifique a saúde:
 
 ```bash
 curl http://localhost:8080/actuator/health   # -> {"status":"UP", ...}
+```
+
+Documentação interativa da API (Swagger UI) e o contrato OpenAPI:
+
+```
+http://localhost:8080/swagger-ui.html   # Swagger UI
+http://localhost:8080/v3/api-docs        # OpenAPI JSON
 ```
 
 ### Desenvolvimento local (precisa de JDK 21)
@@ -280,3 +288,18 @@ Atualizado à medida que cada fase introduz uma decisão.
   estilo REST.
 - **A normalização permanece no domínio:** o service valida e delega; quem
   aplica o sinal é o construtor de `Transaction` (Fase 2), não o service.
+
+### Fase 6 — Documentação de API
+
+- **springdoc-openapi (Swagger UI) com versão pinada** (`2.8.9`): a dependência
+  entra só nesta fase e não é gerenciada pelo BOM do Spring Boot, então a
+  versão é fixada explicitamente. Swagger UI em `/swagger-ui.html`, contrato em
+  `/v3/api-docs`.
+- **Status de erro documentados por anotação:** o springdoc infere 200/201 e os
+  DTOs, mas não os 400/404/422 (que vêm do `GlobalExceptionHandler`). Por isso
+  os controllers declaram `@ApiResponses` com `ProblemDetail` como schema de
+  erro, e os DTOs trazem `@Schema(example = ...)`.
+- **`OpenApiConfig` apenas com metadados reais** (título, versão, descrição) —
+  não uma classe vazia só para preencher a estrutura de pastas.
+- **Actuator preservado:** o springdoc não documenta o Actuator por padrão;
+  `/actuator/health` continua acessível (coberto por teste).
