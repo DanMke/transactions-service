@@ -1,5 +1,7 @@
 # transactions-service
 
+[![CI](https://github.com/DanMke/transactions-service/actions/workflows/ci.yml/badge.svg)](https://github.com/DanMke/transactions-service/actions/workflows/ci.yml)
+
 Serviço de transações (contas e lançamentos financeiros), construído em fases.
 Cada tipo de operação (compra à vista, compra parcelada, saque, voucher de
 crédito) normaliza o sinal do valor: compras e saque são negativos, voucher é
@@ -303,3 +305,15 @@ Atualizado à medida que cada fase introduz uma decisão.
   não uma classe vazia só para preencher a estrutura de pastas.
 - **Actuator preservado:** o springdoc não documenta o Actuator por padrão;
   `/actuator/health` continua acessível (coberto por teste).
+
+### Fase 7 — CI
+
+- **GitHub Actions com um único job (`build-and-test`)** a cada push e pull
+  request: `./gradlew build` compila, testa (inclusive os de Testcontainers) e
+  monta o jar. Sem deploy nem outros jobs.
+- **Testcontainers no runner sem serviços extras:** o `ubuntu-latest` já tem
+  Docker em execução, então os testes de integração sobem seus próprios
+  containers — não é preciso declarar `services:` no workflow.
+- **Versões consistentes com o projeto:** JDK 21 via `setup-java`; o Gradle
+  8.14.5 vem do wrapper, então a CI usa exatamente a mesma versão do
+  desenvolvimento.
