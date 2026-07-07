@@ -18,4 +18,12 @@ class HealthCheckIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }
+
+    @Test
+    void prometheusEndpointReturnsMetrics() {
+        ResponseEntity<String> response = restTemplate.getForEntity("/actuator/prometheus", String.class);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).contains("jvm_memory_used_bytes");
+    }
 }

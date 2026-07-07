@@ -6,6 +6,7 @@ import io.github.danmke.transactions.exception.AccountNotFoundException;
 import io.github.danmke.transactions.exception.InvalidOperationTypeException;
 import io.github.danmke.transactions.exception.InvalidTransactionAmountException;
 import io.github.danmke.transactions.exception.NegativeAmountNotAllowedException;
+import io.github.danmke.transactions.observability.BusinessMetrics;
 import io.github.danmke.transactions.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,11 +38,14 @@ class TransactionServiceTest {
     @Mock
     AccountService accountService;
 
+    @Mock
+    BusinessMetrics businessMetrics;
+
     TransactionService transactionService;
 
     @BeforeEach
     void setUp() {
-        transactionService = new TransactionService(transactionRepository, accountService, FIXED_CLOCK);
+        transactionService = new TransactionService(transactionRepository, accountService, FIXED_CLOCK, businessMetrics);
     }
 
     @Test
@@ -56,6 +60,7 @@ class TransactionServiceTest {
         assertThat(transaction.getOperationType().getId()).isEqualTo(1);
         assertThat(transaction.getAmount()).isEqualByComparingTo("-123.45");
         assertThat(transaction.getEventDate().toInstant()).isEqualTo(FIXED_CLOCK.instant());
+        verify(businessMetrics).transactionCreated(transaction.getOperationType());
     }
 
     @Test
@@ -63,6 +68,7 @@ class TransactionServiceTest {
         assertThatThrownBy(() -> transactionService.create(999L, 1, new BigDecimal("-10.00")))
                 .isInstanceOf(NegativeAmountNotAllowedException.class);
 
+        verify(businessMetrics).transactionFailed("negative_amount");
         verifyNoInteractions(accountService, transactionRepository);
     }
 
@@ -74,6 +80,7 @@ class TransactionServiceTest {
                 .isInstanceOf(AccountNotFoundException.class);
 
         verify(accountService).getById(999L);
+        verify(businessMetrics).transactionFailed("account_not_found");
         verifyNoInteractions(transactionRepository);
     }
 
@@ -85,6 +92,7 @@ class TransactionServiceTest {
                 .isInstanceOf(InvalidOperationTypeException.class);
 
         verify(accountService).getById(1L);
+        verify(businessMetrics).transactionFailed("invalid_operation_type");
         verifyNoInteractions(transactionRepository);
     }
 
@@ -96,6 +104,7 @@ class TransactionServiceTest {
                 .isInstanceOf(InvalidTransactionAmountException.class);
 
         verify(accountService).getById(1L);
+        verify(businessMetrics).transactionFailed("zero_amount");
         verifyNoInteractions(transactionRepository);
     }
 }

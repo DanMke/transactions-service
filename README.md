@@ -12,6 +12,7 @@ derived from the operation type.
 - **Interactive API docs:** `http://localhost:8080/swagger-ui.html`
 - **OpenAPI contract:** `http://localhost:8080/v3/api-docs`
 - **Health:** `http://localhost:8080/actuator/health`
+- **Prometheus metrics:** `http://localhost:8080/actuator/prometheus`
 
 ---
 
@@ -27,6 +28,7 @@ derived from the operation type.
 - [Running the application](#running-the-application)
 - [Testing](#testing)
 - [Continuous integration](#continuous-integration)
+- [Observability](#observability)
 - [Production considerations](#production-considerations)
 - [Configuration](#configuration)
 - [Project structure](#project-structure)
@@ -88,6 +90,7 @@ flowchart LR
 | `io.spring.dependency-management` | 1.1.7 |
 | PostgreSQL | 16.14 (image `postgres:16.14-alpine`) |
 | springdoc-openapi (Swagger UI) | 2.8.9 |
+| Micrometer Prometheus registry | Managed by the Spring Boot BOM |
 | Flyway, Hibernate, JUnit 5, Testcontainers | Managed by the Spring Boot BOM |
 | Docker Engine | Any recent release (min API 1.40) |
 
@@ -326,6 +329,7 @@ for its health check, and only then starts the app (`depends_on: service_healthy
 
 ```bash
 curl http://localhost:8080/actuator/health     # -> {"status":"UP"}
+curl http://localhost:8080/actuator/prometheus # -> Prometheus metrics
 ```
 
 Interactive documentation once the app is up:
@@ -396,7 +400,10 @@ distinct question.
 
 **Integration tests** (Testcontainers + real Postgres, over the HTTP wire):
 
-- `HealthCheckIntegrationTest` — the context boots and `/actuator/health` returns 200.
+- `HealthCheckIntegrationTest` — the context boots and `/actuator/health` plus
+  `/actuator/prometheus` return 200.
+- `ObservabilityIntegrationTest` — business metrics are exported in Prometheus format
+  after real account/transaction requests.
 - `AccountControllerIntegrationTest` — persistence round-trip (create then read back),
   non-unique document numbers, and one `ProblemDetail` error over the wire.
 - `TransactionControllerIntegrationTest` — the sign-normalization pipeline persisted
@@ -421,6 +428,29 @@ distinct question.
   development.
 
 There is no deploy step.
+
+---
+
+## Observability
+
+The application exposes operational endpoints through Spring Boot Actuator:
+
+| Endpoint | Purpose |
+|---|---|
+| `/actuator/health` | Liveness/readiness-style health check used by Docker Compose |
+| `/actuator/prometheus` | Prometheus scrape endpoint with JVM, HTTP, datasource and custom business metrics |
+
+Custom business counters are intentionally small and low-cardinality:
+
+| Metric | Tags | Meaning |
+|---|---|---|
+| `accounts_creation_total` | none | Accounts successfully created |
+| `transactions_creation_total` | `operation_type` | Transactions successfully created by operation type |
+| `transactions_failed_total` | `reason` | Controlled transaction creation failures |
+
+The custom metrics avoid user identifiers such as `account_id`, `document_number` or
+`transaction_id` as tags. This keeps cardinality bounded and avoids exposing sensitive
+business data through metrics.
 
 ---
 
@@ -471,11 +501,12 @@ src/main/java/io/github/danmke/transactions/
   domain/         # entities, OperationType enum, JPA converter
   repository/     # Spring Data JPA repositories
   exception/      # business exceptions + GlobalExceptionHandler
+  observability/  # Micrometer business metrics
   config/         # ClockConfig, OpenApiConfig
 src/main/resources/
   application.yml
   db/migration/   # Flyway: V1 accounts, V2 operation_types, V3 transactions
-src/test/java/    # unit and Testcontainers integration tests
+src/test/java/    # unit, WebMvc and Testcontainers integration tests
 .github/workflows/ci.yml   # CI pipeline
 Dockerfile                 # multi-stage build
 docker-compose.yml         # app + Postgres
@@ -502,3 +533,5 @@ Makefile                   # build/run/test shortcuts
   (`Clock.systemUTC()` in production, a fixed clock in tests).
 - **Flyway owns the schema; Hibernate only validates it.** Migrations are the source
   of truth; `ddl-auto=validate` catches entity/schema drift at startup.
+- **Observable by default.** Actuator exposes health and Prometheus metrics, including
+  low-cardinality business counters for accounts and transactions.
