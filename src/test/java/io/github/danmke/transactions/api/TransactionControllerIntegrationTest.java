@@ -72,6 +72,28 @@ class TransactionControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void listsTransactionsFilteredByAccountNewestFirst() throws Exception {
+        long accountId = createAccount("99988877766");
+
+        ResponseEntity<String> firstTransaction = postJson("/transactions", transactionJson(accountId, 1, "123.45"));
+        ResponseEntity<String> secondTransaction = postJson("/transactions", transactionJson(accountId, 4, "60.00"));
+
+        long firstTransactionId = objectMapper.readTree(firstTransaction.getBody()).get("transaction_id").asLong();
+        long secondTransactionId = objectMapper.readTree(secondTransaction.getBody()).get("transaction_id").asLong();
+
+        ResponseEntity<String> response = restTemplate.getForEntity(
+                "/transactions?account_id=" + accountId, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body).hasSize(2);
+        assertThat(body.get(0).get("transaction_id").asLong()).isEqualTo(secondTransactionId);
+        assertThat(new BigDecimal(body.get(0).get("amount").asText())).isEqualByComparingTo("60.00");
+        assertThat(body.get(1).get("transaction_id").asLong()).isEqualTo(firstTransactionId);
+        assertThat(new BigDecimal(body.get(1).get("amount").asText())).isEqualByComparingTo("-123.45");
+    }
+
+    @Test
     void returnsProblemDetail422OverTheWireForZeroAmount() throws Exception {
         long accountId = createAccount("33344455566");
 

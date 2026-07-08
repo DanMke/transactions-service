@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import static org.hamcrest.Matchers.endsWith;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -57,6 +59,33 @@ class TransactionControllerWebMvcTest {
                 .andExpect(jsonPath("$.operation_type_id").value(1))
                 .andExpect(jsonPath("$.amount").value(-123.45))
                 .andExpect(jsonPath("$.event_date").exists());
+    }
+
+    @Test
+    void listReturns200WithTransactions() throws Exception {
+        Transaction transaction = mock(Transaction.class);
+        when(transaction.getId()).thenReturn(1L);
+        when(transaction.getAccountId()).thenReturn(1L);
+        when(transaction.getOperationType()).thenReturn(OperationType.CREDIT_VOUCHER);
+        when(transaction.getAmount()).thenReturn(new BigDecimal("60.00"));
+        when(transaction.getEventDate()).thenReturn(OffsetDateTime.parse("2026-07-06T12:00:00Z"));
+        when(transactionService.listByAccountId(1L)).thenReturn(List.of(transaction));
+
+        mockMvc.perform(get("/transactions")
+                        .param("account_id", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].transaction_id").value(1))
+                .andExpect(jsonPath("$[0].account_id").value(1))
+                .andExpect(jsonPath("$[0].operation_type_id").value(4))
+                .andExpect(jsonPath("$[0].amount").value(60.00))
+                .andExpect(jsonPath("$[0].event_date").exists());
+    }
+
+    @Test
+    void rejectsListWithoutAccountId() throws Exception {
+        mockMvc.perform(get("/transactions"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:problem-type:missing-request-parameter"));
     }
 
     @Test

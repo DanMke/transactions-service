@@ -1,6 +1,7 @@
 package io.github.danmke.transactions.application;
 
 import io.github.danmke.transactions.domain.Account;
+import io.github.danmke.transactions.domain.OperationType;
 import io.github.danmke.transactions.domain.Transaction;
 import io.github.danmke.transactions.exception.AccountNotFoundException;
 import io.github.danmke.transactions.exception.InvalidOperationTypeException;
@@ -18,6 +19,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -106,5 +108,19 @@ class TransactionServiceTest {
         verify(accountService).getById(1L);
         verify(businessMetrics).transactionFailed("zero_amount");
         verifyNoInteractions(transactionRepository);
+    }
+
+    @Test
+    void validatesAccountBeforeListingTransactionsByAccount() {
+        when(accountService.getById(1L)).thenReturn(new Account("12345678900"));
+        Transaction transaction = new Transaction(1L, OperationType.CREDIT_VOUCHER,
+                new BigDecimal("60.00"), FIXED_CLOCK.instant().atOffset(ZoneOffset.UTC));
+        when(transactionRepository.findByAccountIdOrderByIdDesc(1L)).thenReturn(List.of(transaction));
+
+        List<Transaction> transactions = transactionService.listByAccountId(1L);
+
+        assertThat(transactions).containsExactly(transaction);
+        verify(accountService).getById(1L);
+        verify(transactionRepository).findByAccountIdOrderByIdDesc(1L);
     }
 }

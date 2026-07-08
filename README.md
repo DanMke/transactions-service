@@ -253,6 +253,44 @@ Error responses follow a deliberate **precedence** (checked top to bottom):
 | `422` | `operation_type_id` does not match any known operation type |
 | `422` | `amount` is zero (well-formed but not a valid business amount) |
 
+### `GET /transactions?account_id=...` — list transactions by account
+
+This endpoint is useful for local/manual inspection and returns transactions
+for a specific account, ordered by newest first. The `account_id` query
+parameter is required; the API intentionally does not expose a global
+transaction listing.
+
+```bash
+curl -i 'http://localhost:8080/transactions?account_id=1'
+```
+
+`200 OK`
+
+```json
+[
+  {
+    "transaction_id": 2,
+    "account_id": 1,
+    "operation_type_id": 4,
+    "amount": 60.00,
+    "event_date": "2026-07-06T12:05:00Z"
+  },
+  {
+    "transaction_id": 1,
+    "account_id": 1,
+    "operation_type_id": 1,
+    "amount": -123.45,
+    "event_date": "2026-07-06T12:00:00Z"
+  }
+]
+```
+
+| Status | When |
+|:---:|---|
+| `200` | Transactions listed |
+| `400` | `account_id` is missing or is not a valid number |
+| `404` | `account_id` filter references an account that does not exist |
+
 ---
 
 ## Error handling
@@ -292,6 +330,7 @@ Validation error (`400`) adds an `errors` array with the offending fields:
 | `negative-amount` | 400 | Transaction `amount` is negative |
 | `malformed-json` | 400 | Request body cannot be parsed |
 | `invalid-request-parameter` | 400 | Path/query parameter has the wrong type |
+| `missing-request-parameter` | 400 | Required query parameter is absent (e.g. `account_id` on `GET /transactions`) |
 | `account-not-found` | 404 | Referenced account does not exist |
 | `invalid-operation-type` | 422 | Unknown `operation_type_id` |
 | `invalid-transaction-amount` | 422 | Transaction `amount` is zero |
@@ -342,6 +381,11 @@ Interactive documentation once the app is up:
 http://localhost:8080/swagger-ui.html          # Swagger UI
 http://localhost:8080/v3/api-docs               # OpenAPI JSON
 ```
+
+An Insomnia collection is also available at
+[`docs/insomnia/transactions-service-insomnia.json`](docs/insomnia/transactions-service-insomnia.json).
+Import it into Insomnia and update the `account_id` environment variable after
+creating an account.
 
 ### Optional observability stack
 
@@ -396,12 +440,114 @@ docker compose up --build
 
 ```bash
 make test        # full suite (unit + integration; requires Docker)
-make test-unit   # fast unit tests only (no Docker)
+make test-unit   # fast tests only: unit + web slice (no Docker)
+make coverage    # run tests and generate the JaCoCo coverage report
+make api-test    # API smoke tests against http://localhost:8080 (requires local Python)
+make api-test-docker # API smoke tests in Docker against the Compose app service
 make retest      # re-run everything, bypassing Gradle's up-to-date cache
 ./gradlew test   # equivalent to `make test`
 ```
 
 An HTML report is written to `build/reports/tests/test/index.html`.
+
+### Test coverage
+
+Coverage is measured with **JaCoCo** on every test run:
+
+- HTML report: `build/reports/jacoco/test/html/index.html` (XML alongside it for tooling);
+- `./gradlew build` (and CI) **enforces minimum coverage** via
+  `jacocoTestCoverageVerification`: at least **90% line** and **80% branch**
+  coverage — the build fails below that;
+- current coverage is ~97% line / ~82% branch.
+
+### API smoke tests
+
+The repository includes [scripts/api_smoke_test.py](scripts/api_smoke_test.py), a
+small no-dependency Python script that exercises the running API through real HTTP
+requests:
+
+- `GET /actuator/health`;
+- `POST /accounts`;
+- `GET /accounts/{accountId}`;
+- `POST /transactions` for purchase and credit voucher signs;
+- `GET /transactions?account_id=...`;
+- selected `400` / `404` / `422` ProblemDetail error cases;
+- `GET /actuator/prometheus` for custom business metrics.
+
+Run it locally after the app is up:
+
+```bash
+make up-d
+make api-test
+```
+
+If Python is installed under a different command, override it:
+
+```bash
+make api-test PYTHON=py
+make api-test PYTHON=python3
+```
+
+Run it without local Python, inside Docker, on the Compose network:
+
+```bash
+make up-d
+make api-test-docker
+```
+
+If you run `make` from **Git Bash on Windows**, prefix the command with
+`MSYS_NO_PATHCONV=1`. This is only needed for Git Bash/MSYS on Windows. It is
+not needed on Linux, macOS, PowerShell, or CMD.
+
+Git Bash otherwise rewrites container paths like `/workspace` to Windows paths
+and Docker may fail with `the working directory ... is invalid`.
+
+```bash
+MSYS_NO_PATHCONV=1 make api-test-docker
+```
+
+Equivalent direct commands.
+
+PowerShell:
+
+```powershell
+python scripts/api_smoke_test.py --base-url http://localhost:8080
+docker run --rm --network transactions-service_default `
+  -v "${PWD}:/workspace:ro" `
+  -w /workspace `
+  python:3.13-alpine `
+  python scripts/api_smoke_test.py --base-url http://app:8080
+```
+
+Git Bash on Windows:
+
+```bash
+python scripts/api_smoke_test.py --base-url http://localhost:8080
+MSYS_NO_PATHCONV=1 docker run --rm --network transactions-service_default \
+  -v "$PWD:/workspace:ro" -w /workspace python:3.13-alpine \
+  python scripts/api_smoke_test.py --base-url http://app:8080
+```
+
+Useful parameters:
+
+| Parameter / variable | Default | Purpose |
+|---|---|---|
+| `--base-url` / `API_BASE_URL` | `http://localhost:8080` | Service URL |
+| `--iterations` / `API_TEST_ITERATIONS` | `1` | Number of happy-path account/transaction cycles |
+| `--amount` / `API_TEST_AMOUNT` | `123.45` | Positive transaction magnitude |
+| `--document-prefix` / `API_TEST_DOCUMENT_PREFIX` | `smoke` | Prefix for generated document numbers |
+| `--timeout` / `API_TEST_TIMEOUT` | `5` | HTTP timeout in seconds |
+| `--skip-error-cases` / `API_TEST_SKIP_ERROR_CASES=true` | disabled | Skip negative/error scenarios |
+| `--skip-observability` / `API_TEST_SKIP_OBSERVABILITY=true` | disabled | Skip `/actuator/prometheus` checks |
+| `--verbose` / `API_TEST_VERBOSE=true` | disabled | Print request/response details |
+
+Examples:
+
+```bash
+make api-test API_TEST_ARGS="--iterations 5 --amount 10.00"
+make api-test-docker API_TEST_ARGS="--skip-error-cases --verbose"
+make api-test API_BASE_URL=http://localhost:8081
+```
 
 Integration tests use **Testcontainers**, which starts a real `postgres:16.14-alpine`
 container. A single container is shared across all integration classes
@@ -445,7 +591,7 @@ distinct question.
 - `TransactionControllerIntegrationTest` — the sign-normalization pipeline persisted
   end to end (negative purchase and positive voucher) with a deterministic `event_date`
   via an injected fixed `Clock`, plus one business error over the wire.
-- `OpenApiDocumentationIntegrationTest` — the generated OpenAPI documents all three
+- `OpenApiDocumentationIntegrationTest` — the generated OpenAPI documents the API
   endpoints with their status codes and schemas, Swagger UI is reachable, and Actuator
   stays accessible.
 
@@ -457,11 +603,14 @@ distinct question.
 `build-and-test`, on every **push** and **pull request**:
 
 - checks out the code, sets up **Temurin JDK 21** (with Gradle dependency caching),
-  and runs `./gradlew build` (compile + full test suite + jar assembly);
+  and runs `./gradlew build` (compile + full test suite + jar assembly + JaCoCo
+  coverage report and thresholds);
 - Testcontainers uses the Docker daemon already available on the `ubuntu-latest`
   runner, so no extra services are declared;
 - Gradle comes from the wrapper, so CI uses the exact same version as local
-  development.
+  development;
+- test and coverage reports are uploaded as a build artifact
+  (`test-and-coverage-reports`) on every run.
 
 There is no deploy step.
 
@@ -530,6 +679,22 @@ For a real payment/transaction service, the first production extensions would be
 - **Container reproducibility.** The runtime image uses the Java 21 Alpine tag so it
   receives future Java 21 patch updates automatically. For regulated production
   environments, pinning the image by digest would provide fully reproducible builds.
+- **Authentication and authorization.** The API is intentionally open for the scope
+  of the case. In production it would sit behind authentication (e.g. OAuth2/JWT via
+  Spring Security or an API gateway), with authorization rules tying accounts to the
+  caller's identity.
+- **Structured logging and tracing.** Production would use JSON-structured logs with
+  correlation/trace IDs propagated across requests (Micrometer Tracing / OpenTelemetry),
+  so a transaction can be followed end to end across services and log aggregators.
+- **Pagination for listings.** `GET /transactions?account_id=` returns the full list,
+  which is fine for manual inspection but unbounded. In production it would be
+  paginated (`page`/`size` or cursor-based) with a sane maximum page size.
+- **Load testing.** Before production traffic, throughput and latency targets would be
+  validated with a load-testing tool such as **Grafana k6** (scriptable scenarios in
+  JavaScript, thresholds as code, native Prometheus/Grafana integration — the results
+  plug into the same observability stack shipped here). Pool sizing (HikariCP), JVM
+  memory, and the coverage thresholds of alerting rules would be calibrated with that
+  data instead of guesses.
 
 ---
 
@@ -575,6 +740,9 @@ src/main/resources/
   application.yml
   db/migration/   # Flyway: V1 accounts, V2 operation_types, V3 transactions
 src/test/java/    # unit, WebMvc and Testcontainers integration tests
+docs/
+  insomnia/       # Insomnia collection for manual API exploration
+scripts/          # API smoke test script
 observability/
   prometheus/     # Prometheus scrape config
   grafana/        # Grafana datasource and dashboard provisioning
@@ -607,3 +775,7 @@ Makefile                   # build/run/test shortcuts
   of truth; `ddl-auto=validate` catches entity/schema drift at startup.
 - **Observable by default.** Actuator exposes health and Prometheus metrics, including
   low-cardinality business counters for accounts and transactions.
+- **Hardened runtime container.** The multi-stage build resolves dependencies in a
+  cached layer (fast rebuilds) and the runtime image runs as a **non-root user**.
+- **Coverage enforced, not just measured.** JaCoCo gates the build at 90% line / 80%
+  branch coverage, so the test suite cannot silently erode.

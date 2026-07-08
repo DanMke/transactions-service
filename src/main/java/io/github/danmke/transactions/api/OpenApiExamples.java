@@ -59,6 +59,24 @@ final class OpenApiExamples {
               "event_date": "2026-07-06T12:00:00Z"
             }""";
 
+    static final String TRANSACTION_LIST_RESPONSE = """
+            [
+              {
+                "transaction_id": 2,
+                "account_id": 1,
+                "operation_type_id": 4,
+                "amount": 60.00,
+                "event_date": "2026-07-06T12:05:00Z"
+              },
+              {
+                "transaction_id": 1,
+                "account_id": 1,
+                "operation_type_id": 1,
+                "amount": -123.45,
+                "event_date": "2026-07-06T12:00:00Z"
+              }
+            ]""";
+
     static final String TRANSACTION_VALIDATION_ERROR = """
             {
               "type": "urn:problem-type:validation-failed",

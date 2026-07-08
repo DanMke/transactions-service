@@ -22,7 +22,19 @@ jobs:
 
       # Testcontainers uses the Docker daemon that is already running on the
       # ubuntu-latest runner, so no extra services are required here.
+      # `build` also runs the JaCoCo coverage report and enforces the coverage
+      # thresholds via jacocoTestCoverageVerification (wired into `check`).
       - name: Build and test
         run: |
           chmod +x ./gradlew
           ./gradlew build --no-daemon
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-and-coverage-reports
+          path: |
+            build/reports/tests/test
+            build/reports/jacoco/test
+          retention-days: 14

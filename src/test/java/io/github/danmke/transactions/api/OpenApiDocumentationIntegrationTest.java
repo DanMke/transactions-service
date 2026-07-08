@@ -20,7 +20,7 @@ class OpenApiDocumentationIntegrationTest extends AbstractIntegrationTest {
     ObjectMapper objectMapper;
 
     @Test
-    void documentsAllThreeEndpointsWithTheirStatusCodes() throws Exception {
+    void documentsAllApiEndpointsWithTheirStatusCodes() throws Exception {
         ResponseEntity<String> response = restTemplate.getForEntity("/v3/api-docs", String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -47,6 +47,11 @@ class OpenApiDocumentationIntegrationTest extends AbstractIntegrationTest {
         assertProblemDetailResponse(createTransactionOperation, "400");
         assertProblemDetailResponse(createTransactionOperation, "404");
         assertProblemDetailResponse(createTransactionOperation, "422");
+
+        JsonNode listTransactionsOperation = paths.get("/transactions").get("get");
+        assertArrayResponseDocumentsSchemaAndExample(listTransactionsOperation, "200", "TransactionResponse");
+        assertProblemDetailResponse(listTransactionsOperation, "400");
+        assertProblemDetailResponse(listTransactionsOperation, "404");
 
         JsonNode schemas = apiDocs.get("components").get("schemas");
         assertThat(schemas.has("CreateAccountRequest")).isTrue();
@@ -83,6 +88,16 @@ class OpenApiDocumentationIntegrationTest extends AbstractIntegrationTest {
         JsonNode content = responseContent(operation, statusCode);
 
         assertThat(schemaRef(content.path("schema"))).isEqualTo("#/components/schemas/" + schemaName);
+        assertThat(content.path("examples").isObject()).isTrue();
+        assertThat(content.path("examples").size()).isPositive();
+    }
+
+    private static void assertArrayResponseDocumentsSchemaAndExample(
+            JsonNode operation, String statusCode, String schemaName) {
+        JsonNode content = responseContent(operation, statusCode);
+
+        assertThat(content.path("schema").path("type").asText()).isEqualTo("array");
+        assertThat(schemaRef(content.path("schema").path("items"))).isEqualTo("#/components/schemas/" + schemaName);
         assertThat(content.path("examples").isObject()).isTrue();
         assertThat(content.path("examples").size()).isPositive();
     }

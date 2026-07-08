@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.net.URI;
@@ -96,6 +97,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "Invalid request parameter",
                 "Request parameter has an invalid type",
                 "invalid-request-parameter");
+
+        return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestParameter(
+            MissingServletRequestParameterException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+
+        ProblemDetail problem = problem(
+                HttpStatus.BAD_REQUEST,
+                "Missing request parameter",
+                "Required request parameter '" + ex.getParameterName() + "' is missing",
+                "missing-request-parameter");
 
         return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
     }

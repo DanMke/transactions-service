@@ -1,0 +1,483 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-07-07T00:00:00.000Z",
+  "__export_source": "Codex",
+  "resources": [
+    {
+      "_id": "wrk_transactions_service",
+      "parentId": null,
+      "modified": 0,
+      "created": 0,
+      "name": "Transactions Service",
+      "description": "Import this collection into Insomnia to exercise the Transactions Service API, actuator endpoints, and API documentation endpoints.",
+      "scope": "collection",
+      "_type": "workspace"
+    },
+    {
+      "_id": "env_transactions_service_base",
+      "parentId": "wrk_transactions_service",
+      "modified": 0,
+      "created": 0,
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://localhost:8080",
+        "account_id": "1",
+        "missing_account_id": "99999999",
+        "document_number": "12345678900",
+        "amount": "123.45",
+        "normal_purchase_operation_type_id": "1",
+        "installments_operation_type_id": "2",
+        "withdrawal_operation_type_id": "3",
+        "credit_voucher_operation_type_id": "4",
+        "invalid_operation_type_id": "99"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "base_url",
+          "account_id",
+          "missing_account_id",
+          "document_number",
+          "amount",
+          "normal_purchase_operation_type_id",
+          "installments_operation_type_id",
+          "withdrawal_operation_type_id",
+          "credit_voucher_operation_type_id",
+          "invalid_operation_type_id"
+        ]
+      },
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 0,
+      "_type": "environment"
+    },
+    {
+      "_id": "jar_transactions_service",
+      "parentId": "wrk_transactions_service",
+      "modified": 0,
+      "created": 0,
+      "name": "Default Jar",
+      "cookies": [],
+      "_type": "cookie_jar"
+    },
+    {
+      "_id": "fld_accounts",
+      "parentId": "wrk_transactions_service",
+      "modified": 0,
+      "created": 0,
+      "name": "01 - Accounts",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 100,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_transactions",
+      "parentId": "wrk_transactions_service",
+      "modified": 0,
+      "created": 0,
+      "name": "02 - Transactions",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 200,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_observability_docs",
+      "parentId": "wrk_transactions_service",
+      "modified": 0,
+      "created": 0,
+      "name": "03 - Observability and Docs",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 300,
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_create_account",
+      "parentId": "fld_accounts",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/accounts",
+      "name": "POST /accounts - Create account",
+      "description": "Creates an account. Copy account_id from the response into the environment variable account_id before running account lookup or transaction requests.",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"document_number\": \"{{ _.document_number }}\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 100,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_account",
+      "parentId": "fld_accounts",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/accounts/{{ _.account_id }}",
+      "name": "GET /accounts/{accountId} - Get account",
+      "description": "Returns account data by account_id.",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 110,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_missing_account",
+      "parentId": "fld_accounts",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/accounts/{{ _.missing_account_id }}",
+      "name": "GET /accounts/{accountId} - 404 example",
+      "description": "Returns a ProblemDetail response when the account does not exist.",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 120,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_create_transaction_normal_purchase",
+      "parentId": "fld_transactions",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/transactions",
+      "name": "POST /transactions - Normal purchase",
+      "description": "Creates a purchase transaction. Operation type 1 stores the amount as negative.",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"account_id\": {{ _.account_id }},\n  \"operation_type_id\": {{ _.normal_purchase_operation_type_id }},\n  \"amount\": {{ _.amount }}\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 200,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_create_transaction_installments",
+      "parentId": "fld_transactions",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/transactions",
+      "name": "POST /transactions - Purchase with installments",
+      "description": "Creates an installment purchase transaction. Operation type 2 stores the amount as negative.",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"account_id\": {{ _.account_id }},\n  \"operation_type_id\": {{ _.installments_operation_type_id }},\n  \"amount\": {{ _.amount }}\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 210,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_create_transaction_withdrawal",
+      "parentId": "fld_transactions",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/transactions",
+      "name": "POST /transactions - Withdrawal",
+      "description": "Creates a withdrawal transaction. Operation type 3 stores the amount as negative.",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"account_id\": {{ _.account_id }},\n  \"operation_type_id\": {{ _.withdrawal_operation_type_id }},\n  \"amount\": {{ _.amount }}\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 220,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_create_transaction_credit_voucher",
+      "parentId": "fld_transactions",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/transactions",
+      "name": "POST /transactions - Credit voucher",
+      "description": "Creates a credit voucher transaction. Operation type 4 stores the amount as positive.",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"account_id\": {{ _.account_id }},\n  \"operation_type_id\": {{ _.credit_voucher_operation_type_id }},\n  \"amount\": {{ _.amount }}\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 230,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_list_transactions_by_account",
+      "parentId": "fld_transactions",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/transactions",
+      "name": "GET /transactions?account_id - List by account",
+      "description": "Lists transactions for the current account_id environment variable.",
+      "method": "GET",
+      "body": {},
+      "parameters": [
+        {
+          "name": "account_id",
+          "value": "{{ _.account_id }}"
+        }
+      ],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 240,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_transaction_invalid_operation_type",
+      "parentId": "fld_transactions",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/transactions",
+      "name": "POST /transactions - 422 invalid operation type",
+      "description": "Returns ProblemDetail 422 when operation_type_id does not exist.",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"account_id\": {{ _.account_id }},\n  \"operation_type_id\": {{ _.invalid_operation_type_id }},\n  \"amount\": {{ _.amount }}\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 260,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_transaction_zero_amount",
+      "parentId": "fld_transactions",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/transactions",
+      "name": "POST /transactions - 422 zero amount",
+      "description": "Returns ProblemDetail 422 when amount is zero.",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"account_id\": {{ _.account_id }},\n  \"operation_type_id\": {{ _.normal_purchase_operation_type_id }},\n  \"amount\": 0.00\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 270,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_health",
+      "parentId": "fld_observability_docs",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/actuator/health",
+      "name": "GET /actuator/health",
+      "description": "Checks application health.",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 300,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_prometheus",
+      "parentId": "fld_observability_docs",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/actuator/prometheus",
+      "name": "GET /actuator/prometheus",
+      "description": "Returns Prometheus metrics, including custom business metrics.",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 310,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_openapi_json",
+      "parentId": "fld_observability_docs",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/v3/api-docs",
+      "name": "GET /v3/api-docs",
+      "description": "Returns the OpenAPI document generated by springdoc.",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 320,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_swagger_ui",
+      "parentId": "fld_observability_docs",
+      "modified": 0,
+      "created": 0,
+      "url": "{{ _.base_url }}/swagger-ui.html",
+      "name": "GET /swagger-ui.html",
+      "description": "Opens the Swagger UI HTML entry point.",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 330,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    }
+  ]
+}

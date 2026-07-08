@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Service
 public class TransactionService {
@@ -59,6 +60,12 @@ public class TransactionService {
         Transaction savedTransaction = transactionRepository.save(transaction);
         businessMetrics.transactionCreated(operationType);
         return savedTransaction;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Transaction> listByAccountId(Long accountId) {
+        accountService.getById(accountId);
+        return transactionRepository.findByAccountIdOrderByIdDesc(accountId);
     }
 
     private OperationType resolveOperationType(Integer operationTypeId) {
