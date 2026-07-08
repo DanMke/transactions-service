@@ -27,7 +27,7 @@ final class OpenApiExamples {
               ]
             }""";
 
-    static final String INVALID_ACCOUNT_ID = """
+    static final String INVALID_REQUEST_PARAMETER = """
             {
               "type": "urn:problem-type:invalid-request-parameter",
               "title": "Invalid request parameter",
@@ -94,5 +94,21 @@ final class OpenApiExamples {
               "title": "Invalid operation type",
               "status": 422,
               "detail": "Operation type 99 does not exist"
+            }""";
+
+    static final String TRANSACTION_NOT_FOUND = """
+            {
+              "type": "urn:problem-type:transaction-not-found",
+              "title": "Transaction not found",
+              "status": 404,
+              "detail": "Transaction 99999999 not found"
+            }""";
+
+    static final String MISSING_ACCOUNT_ID_PARAMETER = """
+            {
+              "type": "urn:problem-type:missing-request-parameter",
+              "title": "Missing request parameter",
+              "status": 400,
+              "detail": "Required request parameter 'account_id' is missing"
             }""";
 }

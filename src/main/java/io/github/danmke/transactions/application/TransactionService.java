@@ -6,6 +6,7 @@ import io.github.danmke.transactions.exception.AccountNotFoundException;
 import io.github.danmke.transactions.exception.InvalidOperationTypeException;
 import io.github.danmke.transactions.exception.InvalidTransactionAmountException;
 import io.github.danmke.transactions.exception.NegativeAmountNotAllowedException;
+import io.github.danmke.transactions.exception.TransactionNotFoundException;
 import io.github.danmke.transactions.observability.BusinessMetrics;
 import io.github.danmke.transactions.repository.TransactionRepository;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,12 @@ public class TransactionService {
         Transaction savedTransaction = transactionRepository.save(transaction);
         businessMetrics.transactionCreated(operationType);
         return savedTransaction;
+    }
+
+    @Transactional(readOnly = true)
+    public Transaction getById(Long transactionId) {
+        return transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new TransactionNotFoundException(transactionId));
     }
 
     @Transactional(readOnly = true)

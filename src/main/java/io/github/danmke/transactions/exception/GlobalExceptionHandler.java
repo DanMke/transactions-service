@@ -25,6 +25,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "Account not found", ex.getMessage(), "account-not-found");
     }
 
+    @ExceptionHandler(TransactionNotFoundException.class)
+    public ProblemDetail handleTransactionNotFound(TransactionNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Transaction not found", ex.getMessage(), "transaction-not-found");
+    }
+
     @ExceptionHandler(NegativeAmountNotAllowedException.class)
     public ProblemDetail handleNegativeAmount(NegativeAmountNotAllowedException ex) {
         return problem(HttpStatus.BAD_REQUEST, "Negative amount not allowed", ex.getMessage(), "negative-amount");

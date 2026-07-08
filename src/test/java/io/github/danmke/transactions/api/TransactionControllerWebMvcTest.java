@@ -7,6 +7,7 @@ import io.github.danmke.transactions.exception.AccountNotFoundException;
 import io.github.danmke.transactions.exception.InvalidOperationTypeException;
 import io.github.danmke.transactions.exception.InvalidTransactionAmountException;
 import io.github.danmke.transactions.exception.NegativeAmountNotAllowedException;
+import io.github.danmke.transactions.exception.TransactionNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -59,6 +60,42 @@ class TransactionControllerWebMvcTest {
                 .andExpect(jsonPath("$.operation_type_id").value(1))
                 .andExpect(jsonPath("$.amount").value(-123.45))
                 .andExpect(jsonPath("$.event_date").exists());
+    }
+
+    @Test
+    void getByIdReturns200WithTransaction() throws Exception {
+        Transaction transaction = mock(Transaction.class);
+        when(transaction.getId()).thenReturn(1L);
+        when(transaction.getAccountId()).thenReturn(1L);
+        when(transaction.getOperationType()).thenReturn(OperationType.NORMAL_PURCHASE);
+        when(transaction.getAmount()).thenReturn(new BigDecimal("-123.45"));
+        when(transaction.getEventDate()).thenReturn(OffsetDateTime.parse("2026-07-06T12:00:00Z"));
+        when(transactionService.getById(1L)).thenReturn(transaction);
+
+        mockMvc.perform(get("/transactions/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transaction_id").value(1))
+                .andExpect(jsonPath("$.account_id").value(1))
+                .andExpect(jsonPath("$.operation_type_id").value(1))
+                .andExpect(jsonPath("$.amount").value(-123.45))
+                .andExpect(jsonPath("$.event_date").exists());
+    }
+
+    @Test
+    void getByIdReturns404WhenTransactionMissing() throws Exception {
+        when(transactionService.getById(99999999L)).thenThrow(new TransactionNotFoundException(99999999L));
+
+        mockMvc.perform(get("/transactions/99999999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.type").value("urn:problem-type:transaction-not-found"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void getByIdReturns400ForNonNumericId() throws Exception {
+        mockMvc.perform(get("/transactions/abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:problem-type:invalid-request-parameter"));
     }
 
     @Test

@@ -71,7 +71,7 @@ public class AccountController {
             @ApiResponse(responseCode = "400", description = "Invalid account id",
                     content = @Content(schema = @Schema(implementation = ProblemDetail.class),
                             examples = @ExampleObject(name = "Invalid account id",
-                                    value = OpenApiExamples.INVALID_ACCOUNT_ID))),
+                                    value = OpenApiExamples.INVALID_REQUEST_PARAMETER))),
             @ApiResponse(responseCode = "404", description = "Account not found",
                     content = @Content(schema = @Schema(implementation = ProblemDetail.class),
                             examples = @ExampleObject(name = "Account not found",

@@ -7,6 +7,7 @@ import io.github.danmke.transactions.exception.AccountNotFoundException;
 import io.github.danmke.transactions.exception.InvalidOperationTypeException;
 import io.github.danmke.transactions.exception.InvalidTransactionAmountException;
 import io.github.danmke.transactions.exception.NegativeAmountNotAllowedException;
+import io.github.danmke.transactions.exception.TransactionNotFoundException;
 import io.github.danmke.transactions.observability.BusinessMetrics;
 import io.github.danmke.transactions.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +21,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -122,5 +124,22 @@ class TransactionServiceTest {
         assertThat(transactions).containsExactly(transaction);
         verify(accountService).getById(1L);
         verify(transactionRepository).findByAccountIdOrderByIdDesc(1L);
+    }
+
+    @Test
+    void returnsTransactionById() {
+        Transaction transaction = new Transaction(1L, OperationType.CREDIT_VOUCHER,
+                new BigDecimal("60.00"), FIXED_CLOCK.instant().atOffset(ZoneOffset.UTC));
+        when(transactionRepository.findById(10L)).thenReturn(Optional.of(transaction));
+
+        assertThat(transactionService.getById(10L)).isSameAs(transaction);
+    }
+
+    @Test
+    void rejectsUnknownTransactionOnLookup() {
+        when(transactionRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> transactionService.getById(999L))
+                .isInstanceOf(TransactionNotFoundException.class);
     }
 }

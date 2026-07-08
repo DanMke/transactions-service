@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -75,6 +76,26 @@ public class TransactionController {
         return ResponseEntity.created(location).body(TransactionResponse.from(transaction));
     }
 
+    @Operation(summary = "Get a transaction by id")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Transaction found",
+                    content = @Content(schema = @Schema(implementation = TransactionResponse.class),
+                            examples = @ExampleObject(name = "Transaction found",
+                                    value = OpenApiExamples.TRANSACTION_RESPONSE))),
+            @ApiResponse(responseCode = "400", description = "Invalid transaction id",
+                    content = @Content(schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "Invalid transaction id",
+                                    value = OpenApiExamples.INVALID_REQUEST_PARAMETER))),
+            @ApiResponse(responseCode = "404", description = "Transaction not found",
+                    content = @Content(schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "Transaction not found",
+                                    value = OpenApiExamples.TRANSACTION_NOT_FOUND)))
+    })
+    @GetMapping("/{transactionId}")
+    public TransactionResponse getById(@PathVariable Long transactionId) {
+        return TransactionResponse.from(transactionService.getById(transactionId));
+    }
+
     @Operation(summary = "List transactions by account",
             description = "Returns transactions for the given account_id, ordered by newest first.")
     @ApiResponses({
@@ -82,10 +103,14 @@ public class TransactionController {
                     content = @Content(array = @ArraySchema(schema = @Schema(implementation = TransactionResponse.class)),
                             examples = @ExampleObject(name = "Transaction list",
                                     value = OpenApiExamples.TRANSACTION_LIST_RESPONSE))),
-            @ApiResponse(responseCode = "400", description = "Invalid account id",
+            @ApiResponse(responseCode = "400", description = "Missing or invalid account id",
                     content = @Content(schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(name = "Invalid account id",
-                                    value = OpenApiExamples.INVALID_ACCOUNT_ID))),
+                            examples = {
+                                    @ExampleObject(name = "Missing account_id parameter",
+                                            value = OpenApiExamples.MISSING_ACCOUNT_ID_PARAMETER),
+                                    @ExampleObject(name = "Invalid account id",
+                                            value = OpenApiExamples.INVALID_REQUEST_PARAMETER)
+                            })),
             @ApiResponse(responseCode = "404", description = "Account not found",
                     content = @Content(schema = @Schema(implementation = ProblemDetail.class),
                             examples = @ExampleObject(name = "Account not found",

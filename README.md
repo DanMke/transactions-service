@@ -16,6 +16,23 @@ derived from the operation type.
 - **Prometheus UI (optional):** `http://localhost:9090`
 - **Grafana dashboard (optional):** `http://localhost:3000`
 
+## Quick start
+
+With Docker running (no JDK required):
+
+```bash
+./run.sh                                     # or: make up-d (detached)
+curl http://localhost:8080/actuator/health   # -> {"status":"UP"}
+```
+
+Then open `http://localhost:8080/swagger-ui.html` and try the API. To run the
+test suite and the end-to-end smoke tests:
+
+```bash
+make test              # unit + web-slice + integration tests (needs JDK 21)
+make api-test-docker   # HTTP smoke tests against the running stack
+```
+
 ---
 
 ## Table of contents
@@ -55,6 +72,7 @@ flowchart LR
         domain["domain/<br/>Entities + business rules"]
         repository["repository/<br/>Spring Data JPA"]
         exception["exception/<br/>ProblemDetail handler"]
+        observability["observability/<br/>Micrometer business metrics"]
         config["config/<br/>Clock, OpenAPI"]
     end
 
@@ -65,6 +83,7 @@ flowchart LR
     api --> application
     application --> domain
     application --> repository
+    application --> observability
     repository --> domain
     repository --> db
     api -. errors .-> exception
@@ -78,6 +97,7 @@ flowchart LR
 | `domain/` | Entities and pure business rules (no HTTP/DTO/config dependency) |
 | `repository/` | Data access via Spring Data JPA |
 | `exception/` | Business exceptions and the global `ProblemDetail` handler |
+| `observability/` | Low-cardinality Micrometer business metrics (account/transaction counters) |
 | `config/` | Cross-cutting beans (`Clock`, OpenAPI metadata) |
 
 ---
@@ -146,7 +166,9 @@ Notes:
 
 - Monetary values use `NUMERIC(19,2)` → `BigDecimal` (never floating point).
 - `event_date` uses `TIMESTAMPTZ` → `OffsetDateTime`, generated server-side in UTC.
-- `document_number` is **not** unique — the same document may back multiple accounts.
+- No uniqueness constraint is enforced on `document_number` because the challenge does
+  not define duplicate-document behavior. If the business required one account per
+  document, this would become a unique constraint plus a `409 Conflict` on creation.
 - Database `CHECK` constraints (`amount <> 0`, non-blank `document_number`) provide
   defense in depth on top of the application-level validation.
 
@@ -253,6 +275,32 @@ Error responses follow a deliberate **precedence** (checked top to bottom):
 | `422` | `operation_type_id` does not match any known operation type |
 | `422` | `amount` is zero (well-formed but not a valid business amount) |
 
+### `GET /transactions/{transactionId}` — fetch a transaction
+
+This is the URI announced in the `Location` header of `POST /transactions`.
+
+```bash
+curl -i http://localhost:8080/transactions/1
+```
+
+`200 OK`
+
+```json
+{
+  "transaction_id": 1,
+  "account_id": 1,
+  "operation_type_id": 1,
+  "amount": -123.45,
+  "event_date": "2026-07-06T12:00:00Z"
+}
+```
+
+| Status | When |
+|:---:|---|
+| `200` | Transaction found |
+| `400` | `transactionId` is not a valid number |
+| `404` | Transaction does not exist |
+
 ### `GET /transactions?account_id=...` — list transactions by account
 
 This endpoint is useful for local/manual inspection and returns transactions
@@ -332,6 +380,7 @@ Validation error (`400`) adds an `errors` array with the offending fields:
 | `invalid-request-parameter` | 400 | Path/query parameter has the wrong type |
 | `missing-request-parameter` | 400 | Required query parameter is absent (e.g. `account_id` on `GET /transactions`) |
 | `account-not-found` | 404 | Referenced account does not exist |
+| `transaction-not-found` | 404 | Requested transaction does not exist |
 | `invalid-operation-type` | 422 | Unknown `operation_type_id` |
 | `invalid-transaction-amount` | 422 | Transaction `amount` is zero |
 
@@ -470,6 +519,7 @@ requests:
 - `POST /accounts`;
 - `GET /accounts/{accountId}`;
 - `POST /transactions` for purchase and credit voucher signs;
+- `GET /transactions/{transactionId}` (following the `Location` of the create);
 - `GET /transactions?account_id=...`;
 - selected `400` / `404` / `422` ProblemDetail error cases;
 - `GET /actuator/prometheus` for custom business metrics.
@@ -589,8 +639,9 @@ distinct question.
 - `AccountControllerIntegrationTest` — persistence round-trip (create then read back),
   non-unique document numbers, and one `ProblemDetail` error over the wire.
 - `TransactionControllerIntegrationTest` — the sign-normalization pipeline persisted
-  end to end (negative purchase and positive voucher) with a deterministic `event_date`
-  via an injected fixed `Clock`, plus one business error over the wire.
+  end to end (negative purchase read back through the announced `Location`, positive
+  voucher) with a deterministic `event_date` via an injected fixed `Clock`, plus one
+  business error over the wire.
 - `OpenApiDocumentationIntegrationTest` — the generated OpenAPI documents the API
   endpoints with their status codes and schemas, Swagger UI is reachable, and Actuator
   stays accessible.

@@ -30,6 +30,7 @@ class OpenApiDocumentationIntegrationTest extends AbstractIntegrationTest {
         assertThat(paths.has("/accounts")).isTrue();
         assertThat(paths.has("/accounts/{accountId}")).isTrue();
         assertThat(paths.has("/transactions")).isTrue();
+        assertThat(paths.has("/transactions/{transactionId}")).isTrue();
 
         JsonNode createAccountOperation = paths.get("/accounts").get("post");
         assertRequestBodyDocumentsSchemaAndExample(createAccountOperation, "CreateAccountRequest");
@@ -52,6 +53,11 @@ class OpenApiDocumentationIntegrationTest extends AbstractIntegrationTest {
         assertArrayResponseDocumentsSchemaAndExample(listTransactionsOperation, "200", "TransactionResponse");
         assertProblemDetailResponse(listTransactionsOperation, "400");
         assertProblemDetailResponse(listTransactionsOperation, "404");
+
+        JsonNode getTransactionOperation = paths.get("/transactions/{transactionId}").get("get");
+        assertResponseDocumentsSchemaAndExample(getTransactionOperation, "200", "TransactionResponse");
+        assertProblemDetailResponse(getTransactionOperation, "400");
+        assertProblemDetailResponse(getTransactionOperation, "404");
 
         JsonNode schemas = apiDocs.get("components").get("schemas");
         assertThat(schemas.has("CreateAccountRequest")).isTrue();

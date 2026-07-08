@@ -43,7 +43,7 @@ class TransactionControllerIntegrationTest extends AbstractIntegrationTest {
     ObjectMapper objectMapper;
 
     @Test
-    void createsPurchaseTransactionWithNegativeAmountAndDeterministicEventDate() throws Exception {
+    void createsPurchaseTransactionAndReadsItBackThroughLocation() throws Exception {
         long accountId = createAccount("11122233344");
 
         ResponseEntity<String> response = postJson("/transactions", transactionJson(accountId, 1, "123.45"));
@@ -58,6 +58,15 @@ class TransactionControllerIntegrationTest extends AbstractIntegrationTest {
         assertThat(response.getHeaders().getLocation()).isNotNull();
         assertThat(response.getHeaders().getLocation().getPath())
                 .isEqualTo("/transactions/" + body.get("transaction_id").asLong());
+
+        // The Location URI must be dereferenceable: fetch the transaction back.
+        ResponseEntity<String> fetched = restTemplate.getForEntity(
+                response.getHeaders().getLocation().getPath(), String.class);
+
+        assertThat(fetched.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode fetchedBody = objectMapper.readTree(fetched.getBody());
+        assertThat(fetchedBody.get("transaction_id").asLong()).isEqualTo(body.get("transaction_id").asLong());
+        assertThat(new BigDecimal(fetchedBody.get("amount").asText())).isEqualByComparingTo("-123.45");
     }
 
     @Test

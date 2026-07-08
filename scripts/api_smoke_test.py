@@ -238,6 +238,21 @@ def create_transaction(args, account_id, operation_type_id, amount, expected_amo
     return body
 
 
+def get_transaction(args, transaction_id, expected_amount):
+    _, body, _ = request_json(
+        args.base_url,
+        "GET",
+        f"/transactions/{transaction_id}",
+        args.timeout,
+        expected_status=200,
+        verbose=args.verbose,
+    )
+    check(body.get("transaction_id") == transaction_id, f"Unexpected transaction_id in {body}")
+    actual_amount = decimal_from_json(body.get("amount"))
+    check(actual_amount == expected_amount, f"Expected amount {expected_amount}, got {actual_amount}")
+    print(f"[OK] fetched transaction {transaction_id}")
+
+
 def list_transactions(args, account_id, expected_transaction_ids):
     _, body, _ = request_json(
         args.base_url,
@@ -281,6 +296,11 @@ def run_happy_path(args):
             str(amount),
             abs(amount),
         )
+        get_transaction(
+            args,
+            purchase_transaction["transaction_id"],
+            -abs(amount),
+        )
         list_transactions(
             args,
             account_id,
@@ -311,6 +331,17 @@ def run_error_cases(args):
     )
     expect_problem(body, "account-not-found")
     print("[OK] missing account returns 404 ProblemDetail")
+
+    _, body, _ = request_json(
+        args.base_url,
+        "GET",
+        "/transactions/99999999",
+        args.timeout,
+        expected_status=404,
+        verbose=args.verbose,
+    )
+    expect_problem(body, "transaction-not-found")
+    print("[OK] missing transaction returns 404 ProblemDetail")
 
     document_number = generated_document(args.document_prefix, 999)
     account = create_account(args, document_number)
