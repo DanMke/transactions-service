@@ -1,20 +1,22 @@
-# transactions-service
+# Transactions Service
 
 [![CI](https://github.com/DanMke/transactions-service/actions/workflows/ci.yml/badge.svg)](https://github.com/DanMke/transactions-service/actions/workflows/ci.yml)
 
-A small REST service for managing **accounts** and their **financial transactions**.
+A REST service for managing **accounts** and their **financial transactions**.
 Each transaction is classified by an **operation type** (normal purchase, installment
-purchase, withdrawal, credit voucher). The service enforces a single business rule
+purchase, withdrawal, credit voucher). 
+
+The service enforces a single business rule
 about the amount sign: **purchases and withdrawals are stored as negative, credit
-vouchers as positive** — the client always sends a positive magnitude and the sign is
+vouchers as positive**, the client always sends a positive magnitude and the sign is
 derived from the operation type.
 
 - **Interactive API docs:** `http://localhost:8080/swagger-ui.html`
 - **OpenAPI contract:** `http://localhost:8080/v3/api-docs`
 - **Health:** `http://localhost:8080/actuator/health`
 - **Prometheus metrics:** `http://localhost:8080/actuator/prometheus`
-- **Prometheus UI (optional):** `http://localhost:9090`
-- **Grafana dashboard (optional):** `http://localhost:3000`
+- **Prometheus UI (optional stack):** `http://localhost:9090`
+- **Grafana dashboard (optional stack):** `http://localhost:3000`
 
 ## Quick start
 
@@ -59,7 +61,7 @@ make api-test-docker   # HTTP smoke tests against the running stack
 
 The application follows a layered architecture under the root package
 `io.github.danmke.transactions`. The domain layer holds entities and pure business
-rules and has **no** dependency on Spring MVC, DTOs, HTTP, or configuration.
+rules and has no dependency on Spring MVC, DTOs, HTTP, or configuration.
 
 ```mermaid
 flowchart LR
@@ -136,23 +138,23 @@ erDiagram
 
     accounts {
         bigint account_id PK "identity"
-        varchar_50 document_number "NOT NULL, CHECK not blank"
+        varchar(50) document_number "NOT NULL, CHECK not blank"
     }
     operation_types {
         int operation_type_id PK
-        varchar_50 description "NOT NULL"
+        varchar(50) description "NOT NULL"
     }
     transactions {
         bigint transaction_id PK "identity"
         bigint account_id FK "NOT NULL"
         int operation_type_id FK "NOT NULL"
-        numeric_19_2 amount "NOT NULL, CHECK <> 0"
+        numeric(19,2) amount "NOT NULL, CHECK <> 0"
         timestamptz event_date "NOT NULL"
     }
 ```
 
 **`operation_types`** is a fixed lookup table backing the FK on `transactions`. It is
-seeded with four rows and is **not** a queryable JPA entity — in code it is the
+seeded with four rows and is not a queryable JPA entity, in code it is the
 `OperationType` enum (mapped to `operation_type_id` by a JPA `AttributeConverter`):
 
 | `operation_type_id` | Description | Amount sign |
@@ -178,16 +180,16 @@ Notes:
 
 Creating a transaction exercises every layer and the full validation chain:
 
-1. **`api/`** — the controller receives the JSON payload and applies Bean Validation
+1. **`api/`** - the controller receives the JSON payload and applies Bean Validation
    (`@NotNull`, `@Digits`). Malformed payloads are rejected here with **400**.
-2. **`application/`** — `TransactionService` runs business validation in a strict
+2. **`application/`** - `TransactionService` runs business validation in a strict
    precedence order (sign → account exists → operation type valid → non-zero), loads
    the `Account`, resolves the `OperationType`, and stamps `event_date` from an
    injected `Clock`.
-3. **`domain/`** — the `Transaction` constructor applies the sign normalization and
+3. **`domain/`** - the `Transaction` constructor applies the sign normalization and
    enforces its own invariants, so an invalid instance can never be constructed.
-4. **`repository/`** — the entity is persisted via Spring Data JPA.
-5. **`api/`** — the controller returns `201 Created` with the persisted resource
+4. **`repository/`** - the entity is persisted via Spring Data JPA.
+5. **`api/`** - the controller returns `201 Created` with the persisted resource
    (normalized amount + generated `event_date`) and a `Location` header.
 
 Any exception raised on the way is turned into an RFC 7807 `ProblemDetail` by the
@@ -199,7 +201,7 @@ global handler (see [Error handling](#error-handling)).
 
 Base URL: `http://localhost:8080`. All request/response fields use **snake_case**.
 
-### `POST /accounts` — create an account
+### `POST /accounts` - create an account
 
 Request:
 
@@ -209,7 +211,7 @@ curl -i -X POST http://localhost:8080/accounts \
   -d '{ "document_number": "12345678900" }'
 ```
 
-`201 Created` — `Location: http://localhost:8080/accounts/1`
+`201 Created` - `Location: http://localhost:8080/accounts/1`
 
 ```json
 { "account_id": 1, "document_number": "12345678900" }
@@ -220,7 +222,7 @@ curl -i -X POST http://localhost:8080/accounts \
 | `201` | Account created |
 | `400` | `document_number` missing/blank or longer than 50 characters |
 
-### `GET /accounts/{accountId}` — fetch an account
+### `GET /accounts/{accountId}` - fetch an account
 
 ```bash
 curl -i http://localhost:8080/accounts/1
@@ -238,7 +240,7 @@ curl -i http://localhost:8080/accounts/1
 | `400` | `accountId` is not a valid number |
 | `404` | Account does not exist |
 
-### `POST /transactions` — create a transaction
+### `POST /transactions` - create a transaction
 
 `amount` must be a **positive magnitude**; the stored sign is derived from the
 operation type.
@@ -249,7 +251,7 @@ curl -i -X POST http://localhost:8080/transactions \
   -d '{ "account_id": 1, "operation_type_id": 1, "amount": 123.45 }'
 ```
 
-`201 Created` — `Location: http://localhost:8080/transactions/1`
+`201 Created` - `Location: http://localhost:8080/transactions/1`
 
 ```json
 {
@@ -270,12 +272,12 @@ Error responses follow a deliberate **precedence** (checked top to bottom):
 |:---:|---|
 | `400` | `account_id`, `operation_type_id` or `amount` missing (Bean Validation) |
 | `400` | `amount` has more digits than `NUMERIC(19,2)` allows |
-| `400` | `amount` is negative (positive magnitude required — a client contract error) |
+| `400` | `amount` is negative (positive magnitude required - a client contract error) |
 | `404` | `account_id` does not reference an existing account |
 | `422` | `operation_type_id` does not match any known operation type |
 | `422` | `amount` is zero (well-formed but not a valid business amount) |
 
-### `GET /transactions/{transactionId}` — fetch a transaction
+### `GET /transactions/{transactionId}` - fetch a transaction
 
 This is the URI announced in the `Location` header of `POST /transactions`.
 
@@ -301,7 +303,7 @@ curl -i http://localhost:8080/transactions/1
 | `400` | `transactionId` is not a valid number |
 | `404` | Transaction does not exist |
 
-### `GET /transactions?account_id=...` — list transactions by account
+### `GET /transactions?account_id=...` - list transactions by account
 
 This endpoint is useful for local/manual inspection and returns transactions
 for a specific account, ordered by newest first. The `account_id` query
@@ -343,7 +345,7 @@ curl -i 'http://localhost:8080/transactions?account_id=1'
 
 ## Error handling
 
-Every error — business or validation — is returned as an RFC 7807
+Every error - business or validation - is returned as an RFC 7807
 [`ProblemDetail`](https://www.rfc-editor.org/rfc/rfc7807) with content type
 `application/problem+json`. There is a single error format across the whole API.
 
@@ -396,10 +398,10 @@ What you need depends on **how** you want to run the project:
 | Develop / run tests locally (`make test`, `make run`) | The above **+ JDK 21** |
 
 - **Docker must be running** for the tests (Testcontainers) and for `docker compose`.
-- **Gradle does not need to be installed** — the wrapper (`gradlew` / `gradlew.bat`)
+- **Gradle does not need to be installed** - the wrapper (`gradlew` / `gradlew.bat`)
   downloads the pinned version automatically.
 - On **Windows**, `make` is not bundled: install it with `choco install make` or
-  `scoop install make` (optional — every target maps to a plain command).
+  `scoop install make` (optional - every target maps to a plain command).
 
 ---
 
@@ -434,7 +436,8 @@ http://localhost:8080/v3/api-docs               # OpenAPI JSON
 An Insomnia collection is also available at
 [`docs/insomnia/transactions-service-insomnia.json`](docs/insomnia/transactions-service-insomnia.json).
 Import it into Insomnia and update the `account_id` environment variable after
-creating an account.
+creating an account. After creating a transaction, also update `transaction_id`
+to exercise `GET /transactions/{transactionId}`.
 
 ### Optional observability stack
 
@@ -506,7 +509,7 @@ Coverage is measured with **JaCoCo** on every test run:
 - HTML report: `build/reports/jacoco/test/html/index.html` (XML alongside it for tooling);
 - `./gradlew build` (and CI) **enforces minimum coverage** via
   `jacocoTestCoverageVerification`: at least **90% line** and **80% branch**
-  coverage — the build fails below that;
+  coverage - the build fails below that;
 - current coverage is ~97% line / ~82% branch.
 
 ### API smoke tests
@@ -611,38 +614,38 @@ specific identity values.
 
 ### What is covered
 
-The suite follows a test pyramid — many fast tests, few slow ones, each layer owning a
+The suite follows a test pyramid - many fast tests, few slow ones, each layer owning a
 distinct question.
 
 **Unit tests** (no Spring context / no Docker):
 
-- `OperationTypeTest` — amount-sign normalization for all four operation types
+- `OperationTypeTest` - amount-sign normalization for all four operation types
   (including negative inputs), `fromId` resolution, and rejection of unknown ids.
-- `AccountTest` / `TransactionTest` — entity constructor invariants (document trimming,
+- `AccountTest` / `TransactionTest` - entity constructor invariants (document trimming,
   and rejection of null/blank/zero).
-- `TransactionServiceTest` — the service-level validation precedence with Mockito
+- `TransactionServiceTest` - the service-level validation precedence with Mockito
   (`400` before account lookup, `404` before operation type, `422` before save).
 
-**Web-slice tests** (`@WebMvcTest`, mocked service — no full context, no Docker):
+**Web-slice tests** (`@WebMvcTest`, mocked service - no full context, no Docker):
 
-- `AccountControllerWebMvcTest` / `TransactionControllerWebMvcTest` — own the
+- `AccountControllerWebMvcTest` / `TransactionControllerWebMvcTest` - own the
   validation/error matrix for each endpoint: missing/oversized fields, malformed JSON,
   non-numeric path variables, and the `ProblemDetail` mapping for every business error
   (`400` / `404` / `422`). Fast, with the failure signal isolated to the web layer.
 
 **Integration tests** (Testcontainers + real Postgres, over the HTTP wire):
 
-- `HealthCheckIntegrationTest` — the context boots and `/actuator/health` plus
+- `HealthCheckIntegrationTest` - the context boots and `/actuator/health` plus
   `/actuator/prometheus` return 200.
-- `ObservabilityIntegrationTest` — business metrics are exported in Prometheus format
+- `ObservabilityIntegrationTest` - business metrics are exported in Prometheus format
   after real account/transaction requests.
-- `AccountControllerIntegrationTest` — persistence round-trip (create then read back),
+- `AccountControllerIntegrationTest` - persistence round-trip (create then read back),
   non-unique document numbers, and one `ProblemDetail` error over the wire.
-- `TransactionControllerIntegrationTest` — the sign-normalization pipeline persisted
+- `TransactionControllerIntegrationTest` - the sign-normalization pipeline persisted
   end to end (negative purchase read back through the announced `Location`, positive
   voucher) with a deterministic `event_date` via an injected fixed `Clock`, plus one
   business error over the wire.
-- `OpenApiDocumentationIntegrationTest` — the generated OpenAPI documents the API
+- `OpenApiDocumentationIntegrationTest` - the generated OpenAPI documents the API
   endpoints with their status codes and schemas, Swagger UI is reachable, and Actuator
   stays accessible.
 
@@ -742,7 +745,7 @@ For a real payment/transaction service, the first production extensions would be
   paginated (`page`/`size` or cursor-based) with a sane maximum page size.
 - **Load testing.** Before production traffic, throughput and latency targets would be
   validated with a load-testing tool such as **Grafana k6** (scriptable scenarios in
-  JavaScript, thresholds as code, native Prometheus/Grafana integration — the results
+  JavaScript, thresholds as code, native Prometheus/Grafana integration - the results
   plug into the same observability stack shipped here). Pool sizing (HikariCP), JVM
   memory, and the coverage thresholds of alerting rules would be calibrated with that
   data instead of guesses.

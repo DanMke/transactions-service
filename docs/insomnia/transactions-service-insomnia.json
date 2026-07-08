@@ -45,7 +45,9 @@
           "installments_operation_type_id",
           "withdrawal_operation_type_id",
           "credit_voucher_operation_type_id",
-          "invalid_operation_type_id"
+          "invalid_operation_type_id",
+          "transaction_id",
+          "missing_transaction_id"
         ]
       },
       "color": null,
